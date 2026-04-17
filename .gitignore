@@ -3,4 +3,5 @@ __pycache__/
 .env
 .venv/
 .vscode/
+serverroom.code-workspace
 .DS_Store
