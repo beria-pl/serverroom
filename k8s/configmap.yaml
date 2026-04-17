@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: serverroom-config
+  namespace: serverroom
+data:
+  APP_NAME: "Serverroom Visualizer"
+  JWT_ALGORITHM: "HS256"
+  JWT_EXPIRE_MINUTES: "480"
+  LDAP_ENABLED: "true"
+  LDAP_SERVER_URI: "ldap://openldap.default.svc.cluster.local:389"
+  LDAP_DOMAIN: "example.com"
+  LDAP_BASE_DN: "dc=example,dc=com"

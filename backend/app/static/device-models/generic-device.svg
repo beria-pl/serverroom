@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="90" viewBox="0 0 320 90">
+  <rect x="4" y="10" width="312" height="70" rx="8" fill="#4b5563" />
+  <rect x="18" y="24" width="180" height="42" rx="4" fill="#374151" />
+  <rect x="206" y="24" width="48" height="42" rx="4" fill="#1f2937" />
+  <rect x="258" y="24" width="48" height="42" rx="4" fill="#1f2937" />
+  <circle cx="230" cy="45" r="9" fill="#9ca3af" />
+  <circle cx="281" cy="45" r="9" fill="#9ca3af" />
+  <text x="20" y="80" font-size="11" fill="#e5e7eb" font-family="Arial">Generic rack device template</text>
+</svg>

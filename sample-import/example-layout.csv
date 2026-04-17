@@ -1,0 +1,5 @@
+serverroom,floor,rackname,uposition,serialnumber
+Main Serverroom,Main Serverroom Floor,A01,1,SN-CISCO-3001
+Main Serverroom,Main Serverroom Floor,A01,2,SN-DELL-1001
+Main Serverroom,Main Serverroom Floor,A01,3,SN-HPE-2001
+Main Serverroom,Main Serverroom Floor,A02,1,SN-BROCADE-3002

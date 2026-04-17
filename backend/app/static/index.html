@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Serverroom Visualizer v0.8</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20260417g" />
+</head>
+<body>
+  <div id="loginGate" class="login-gate">
+    <div class="login-card">
+      <h1>Serverroom Visualizer <span class="app-version">v0.8</span></h1>
+      <p>Login to manage serverrooms, racks, and inventory templates.</p>
+      <input id="username" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <button id="loginBtn">Login</button>
+      <p id="authStatus">Not logged in</p>
+    </div>
+  </div>
+
+  <div id="appShell" hidden>
+    <header class="topbar">
+      <h1>Serverroom Visualizer <span class="app-version">v0.8</span></h1>
+      <nav class="top-menu">
+        <details>
+          <summary>Inventory</summary>
+          <div class="menu-popover">
+            <button id="menuAddServerroomBtn">Add Serverroom</button>
+            <button id="menuAddFloorplanBtn">Add Floorplan</button>
+            <button id="menuAddRackBtn">Add Rack</button>
+            <button id="menuAddTemplateBtn">Add Device Template</button>
+          </div>
+        </details>
+        <button id="menuImportCsvBtn" class="menu-link-btn">CSV Import</button>
+        <details>
+          <summary>View</summary>
+          <div class="menu-popover">
+            <button id="menuToggleLeftPanelBtn">Toggle Left Panel</button>
+            <button id="menuToggleRightPanelBtn">Toggle Right Panel</button>
+            <button id="menuShowRecentChangesBtn">Recent Changes</button>
+          </div>
+        </details>
+        <button id="darkModeToggleBtn" class="menu-link-btn">Dark Mode</button>
+        <details>
+          <summary>Admin</summary>
+          <div class="menu-popover">
+            <button id="menuToggleLocalUsersBtn">Local Users</button>
+          </div>
+        </details>
+      </nav>
+      <div class="auth-strip">
+        <span id="sessionInfo">Authenticated</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section id="leftPanel" class="panel left">
+        <details class="panel-section">
+          <summary>Serverrooms</summary>
+          <div class="panel-section-body">
+            <div class="row split">
+              <input id="serverroomName" placeholder="New serverroom" />
+              <button id="createServerroomBtn">Create</button>
+            </div>
+            <select id="serverroomSelect" size="5"></select>
+          </div>
+        </details>
+
+        <details class="panel-section">
+          <summary>Floorplans</summary>
+          <div class="panel-section-body">
+            <div class="row">
+              <input id="floorplanName" placeholder="Floorplan name" />
+            </div>
+            <div class="row split">
+              <input id="floorplanWidth" type="number" value="1000" min="200" />
+              <input id="floorplanHeight" type="number" value="640" min="200" />
+            </div>
+            <button id="createFloorplanBtn">Create Floorplan</button>
+            <select id="floorplanSelect" size="6"></select>
+          </div>
+        </details>
+
+        <details class="panel-section">
+          <summary>Racks</summary>
+          <div class="panel-section-body">
+            <div class="row">
+              <input id="rackName" placeholder="Rack name" />
+            </div>
+            <button id="addRackBtn">Add Rack at Center</button>
+            <button id="saveRackBtn">Save Selected Rack Position</button>
+            <button id="deleteRackBtn">Delete Selected Rack</button>
+            <p class="hint">Drag rack blocks directly on the floorplan.</p>
+          </div>
+        </details>
+
+        <details class="panel-section">
+          <summary>Device Search</summary>
+          <div class="panel-section-body">
+            <input id="deviceSearchInput" placeholder="Search hostname, serial, model, vendor..." />
+            <div id="deviceSearchList" class="device-search-list">
+              <p class="hint">No matching devices.</p>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <div id="leftResizer" class="panel-resizer" aria-label="Resize left panel" role="separator"></div>
+
+      <section class="panel center">
+        <h2>Floor Layout</h2>
+        <div id="canvasWrap">
+          <svg id="floorSvg"></svg>
+        </div>
+
+        <h2 id="rackEditorTitle">Rack U Layout</h2>
+        <div class="rack-edit-workspace">
+          <div>
+            <p class="hint">Use Inventory menu to add templates into selected rack. Drag existing blocks to reposition.</p>
+            <div id="rackEditor" class="rack-editor"></div>
+          </div>
+          <aside id="deviceDock" class="device-dock">
+            <h3 id="deviceDockTitle">Device Editor</h3>
+            <p id="deviceDockEmpty" class="hint">Select a device with one click to edit it here.</p>
+            <div id="deviceDockForm" hidden>
+              <div class="row split">
+                <div class="field-group">
+                  <input id="modalDeviceName" placeholder="Device name" />
+                  <div class="field-help">Display name shown on the rack block.</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalHostname" placeholder="Hostname" />
+                  <div class="field-help">Hostname (for example: server1).</div>
+                </div>
+              </div>
+              <div class="row split">
+                <div class="field-group">
+                  <input id="modalMgmtIp" placeholder="Mgmt IP (iDRAC/iLO)" />
+                  <div class="field-help">Out-of-band management IP (iDRAC/iLO).</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalHostIp" placeholder="Host IP" />
+                  <div class="field-help">Primary OS or service IP address.</div>
+                </div>
+              </div>
+              <div class="row split">
+                <div class="field-group">
+                  <input id="modalSshEndpoint" placeholder="SSH endpoint" />
+                  <div class="field-help">SSH target, for example host:22.</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalSerial" placeholder="Serial number" />
+                  <div class="field-help">Vendor serial number for tracking.</div>
+                </div>
+              </div>
+              <div class="row split">
+                <div class="field-group">
+                  <input id="modalUPosition" type="number" min="1" placeholder="U position" />
+                  <div class="field-help">Bottom U slot where the device starts.</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalUHeight" type="number" min="1" placeholder="U height" />
+                  <div class="field-help">How many rack units the device occupies.</div>
+                </div>
+              </div>
+              <div class="row split">
+                <div class="field-group">
+                  <select id="modalMountSide">
+                    <option value="front">front</option>
+                    <option value="back">back</option>
+                  </select>
+                  <div class="field-help">Mount side in the rack (front/back).</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalModel" placeholder="Model" />
+                  <div class="field-help">Hardware model identifier.</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="field-group">
+                  <textarea id="modalNotes" placeholder="Notes"></textarea>
+                  <div class="field-help">Free-form notes about this device.</div>
+                </div>
+              </div>
+              <div class="row split">
+                <button id="saveDeviceModalBtn">Save Device</button>
+                <button id="removeFromRackBtn" class="btn-danger">Remove From Rack</button>
+                <button id="archiveDeviceBtn" class="btn-secondary">Archive Device</button>
+                <button id="closeDeviceModalBtn" class="btn-secondary">Clear Selection</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <div id="rightResizer" class="panel-resizer" aria-label="Resize right panel" role="separator"></div>
+
+      <section id="rightPanel" class="panel right">
+        <h2 id="devicesTableTitle">Devices in Selected Rack</h2>
+        <table id="deviceTable">
+          <thead>
+            <tr>
+              <th>Hostname</th>
+              <th>Device</th>
+              <th>U</th>
+              <th>Mgmt IP</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <section id="localUsersSection" hidden>
+          <h2>Local Users (Admin)</h2>
+          <div class="row split">
+            <input id="newLocalUsername" placeholder="Username" />
+            <input id="newLocalPassword" type="password" placeholder="Password" />
+          </div>
+          <div class="row split">
+            <select id="newLocalRole">
+              <option value="user">user</option>
+              <option value="admin">admin</option>
+            </select>
+            <button id="createLocalUserBtn">Create User</button>
+          </div>
+          <table id="localUsersTable">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Active</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="recentChangesModal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card-wide">
+      <h2>Recent Changes</h2>
+      <ul id="auditList"></ul>
+      <div class="row">
+        <button id="closeRecentChangesBtn" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="inventoryManagerModal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card-wide">
+      <h2>Inventory Manager</h2>
+      <div class="inventory-manager-grid">
+        <section>
+          <h3>Add Template</h3>
+          <div class="row split">
+            <input id="templateVendor" placeholder="Vendor" />
+            <input id="templateModelCode" placeholder="Model code" />
+          </div>
+          <div class="row split">
+            <input id="templateName" placeholder="Display name" />
+            <input id="templateUHeight" type="number" min="1" value="1" placeholder="U" />
+          </div>
+          <div class="row split">
+            <input id="templateType" placeholder="Type (server/storage/switch)" />
+            <input id="templateImage" placeholder="Image URL" />
+          </div>
+          <div class="row split">
+            <button id="createTemplateBtn">Add To Inventory</button>
+            <button id="closeInventoryManagerBtn" class="btn-secondary">Close</button>
+          </div>
+        </section>
+
+        <section>
+          <h3>Templates</h3>
+          <div id="inventoryTemplateList" class="inventory-list"></div>
+        </section>
+
+        <section>
+          <h3>Template Preview</h3>
+          <div id="inventoryPreview" class="inventory-preview">
+            <p class="hint">Select a template to preview and insert into selected rack.</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="csvImportModal" class="modal-backdrop" hidden>
+    <div class="modal-card modal-card-wide">
+      <h2>CSV Import</h2>
+      <p class="hint">Use two files: first inventory, then layout placement by serial number.</p>
+
+      <section class="csv-import-section">
+        <h3>Inventory CSV</h3>
+        <p class="hint">Suggested columns: name, model, serialnumber, vendor, device_type, u_height, management_ip.</p>
+        <div class="row split">
+          <input id="inventoryCsvFile" type="file" accept=".csv,text/csv" />
+          <button id="importInventoryCsvBtn">Import Inventory</button>
+        </div>
+      </section>
+
+      <section class="csv-import-section">
+        <h3>Layout CSV</h3>
+        <p class="hint">Required columns: serverroom, floor, rackname, uposition, serialnumber.</p>
+        <p class="hint">Layout import clears existing devices in targeted racks before placing imported devices.</p>
+        <div class="row split">
+          <input id="layoutCsvFile" type="file" accept=".csv,text/csv" />
+          <button id="importLayoutCsvBtn">Import Layout</button>
+        </div>
+      </section>
+
+      <pre id="csvImportStatus" class="csv-import-status">No import yet.</pre>
+      <div class="row">
+        <button id="closeCsvImportModalBtn" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20260417g"></script>
+</body>
+</html>

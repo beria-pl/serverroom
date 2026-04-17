@@ -1,0 +1,4 @@
+name,model,serialnumber,vendor,device_type,u_height,mount_side,management_ip,hostname,image_url,notes
+LAB-SW-01,Catalyst 9300,CS9300-0001,Cisco,switch,1,back,10.20.0.11,lab-sw-01,/static/device-models/cisco-c9300.svg,Imported from CSV
+LAB-SRV-01,PowerEdge R670,PE670-0001,Dell,server,1,front,10.20.0.21,lab-srv-01,/static/device-models/dell-r670.svg,Imported from CSV
+LAB-SRV-02,ProLiant DL380,DL380-0001,HPE,server,2,front,10.20.0.22,lab-srv-02,/static/device-models/hp-dl380.svg,Imported from CSV

@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: serverroom-app
+  namespace: serverroom
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: serverroom-app
+  template:
+    metadata:
+      labels:
+        app: serverroom-app
+    spec:
+      containers:
+        - name: app
+          image: your-registry/serverroom:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: serverroom-config
+            - secretRef:
+                name: serverroom-secret
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 8
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: serverroom-app
+  namespace: serverroom
+spec:
+  selector:
+    app: serverroom-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000

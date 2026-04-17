@@ -1,0 +1,4 @@
+name,model,serialnumber,vendor,device_type,u_height,mount_side,management_ip
+WEB-01,PowerEdge R670,SN-DELL-1001,Dell,server,1,front,10.20.1.11
+DB-01,ProLiant DL380,SN-HPE-2001,HPE,server,2,front,10.20.1.21
+SW-01,Catalyst 9300,SN-CISCO-3001,Cisco,switch,1,back,10.20.1.31

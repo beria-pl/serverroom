@@ -1,0 +1,5 @@
+name,model,serialnumber,vendor,device_type,u_height,mount_side,management_ip,hostname,host_ip,ssh_endpoint,image_url,notes
+WEB-01,PowerEdge R670,SN-DELL-1001,Dell,server,1,front,10.20.1.11,web-01,172.16.10.11,ssh://web-01.dc.local,/static/device-models/dell-r670.svg,Frontend node
+DB-01,ProLiant DL380,SN-HPE-2001,HPE,server,2,front,10.20.1.21,db-01,172.16.20.21,ssh://db-01.dc.local,/static/device-models/hp-dl380.svg,Postgres cluster primary
+SW-01,Catalyst 9300,SN-CISCO-3001,Cisco,switch,1,back,10.20.1.31,sw-01,172.16.30.31,ssh://sw-01.dc.local,/static/device-models/cisco-c9300.svg,Top of rack switch
+SW-02,ICX 7450,SN-BROCADE-3002,Brocade,switch,1,back,10.20.1.32,sw-02,172.16.30.32,ssh://sw-02.dc.local,/static/device-models/brocade-icx7450.svg,Aggregation switch

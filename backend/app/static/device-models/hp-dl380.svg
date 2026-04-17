@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="90" viewBox="0 0 320 90">
+  <rect x="4" y="8" width="312" height="74" rx="8" fill="#2d3436" />
+  <rect x="12" y="16" width="296" height="58" rx="4" fill="#3b4347" />
+  <rect x="18" y="22" width="120" height="46" rx="3" fill="#1f2426" />
+  <rect x="145" y="22" width="64" height="46" rx="3" fill="#1f2426" />
+  <rect x="214" y="22" width="38" height="46" rx="3" fill="#1f2426" />
+  <rect x="257" y="22" width="46" height="46" rx="3" fill="#1f2426" />
+  <circle cx="231" cy="45" r="10" fill="#7f8c8d" />
+  <circle cx="281" cy="45" r="10" fill="#7f8c8d" />
+  <text x="20" y="82" font-size="11" fill="#dfe6e9" font-family="Arial">HP ProLiant DL380 (template)</text>
+</svg>
