@@ -122,6 +122,14 @@ body.theme-dark .device-search-item.archived {
   background: #1b2634;
 }
 
+body.theme-dark .webgui-footer a {
+  color: #a9b6c5;
+}
+
+body.theme-dark .webgui-footer a:hover {
+  color: #dbe8f7;
+}
+
 body.theme-dark .device-dock {
   background: #141f2b;
   border-color: var(--line);
@@ -251,6 +259,22 @@ body.theme-dark .app-version {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.webgui-footer {
+  text-align: center;
+  padding: 8px 12px 14px;
+}
+
+.webgui-footer a {
+  font-size: 0.78rem;
+  color: #6a5f50;
+  text-decoration: none;
+}
+
+.webgui-footer a:hover {
+  color: #3f372a;
+  text-decoration: underline;
 }
 
 button,
