@@ -154,6 +154,19 @@ Local users are always available and checked first during login. If local auth f
 - `POST /api/devices/{id}/archive` (remove from rack and keep archived in inventory)
 - `GET /api/audit`
 
+## GitHub Actions (CI)
+
+Repository includes CI workflow at `.github/workflows/ci.yml`.
+
+It runs on push/PR to `main` and manually (`workflow_dispatch`), and performs:
+
+- Python dependency install (`backend/requirements.txt`)
+- Python syntax validation for `backend/app`
+- Docker Compose build/start
+- HTTP smoke test on `http://127.0.0.1:8000/`
+
+You can view runs in GitHub: **Actions** tab -> **CI** workflow.
+
 ## CSV Import Notes
 
 - Inventory CSV supports `mount_side` (aliases: `side`, `position`) with values `front` or `back`.
