@@ -14,6 +14,7 @@ import random
 from datetime import datetime, timezone
 
 from .audit import write_audit
+from .version import __version__
 from .auth import (
     authenticate_local_user,
     build_totp_provisioning_uri,
@@ -535,6 +536,11 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 @app.get("/")
 def root() -> FileResponse:
     return FileResponse("app/static/index.html")
+
+
+@app.get("/api/version")
+def get_version():
+    return {"version": __version__}
 
 
 @app.post("/api/auth/login", response_model=TokenResponse)

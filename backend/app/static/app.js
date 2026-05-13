@@ -47,6 +47,21 @@ function toggleTheme() {
   applyTheme();
 }
 
+async function loadAndDisplayVersion() {
+  try {
+    const res = await fetch("/api/version");
+    if (res.ok) {
+      const data = await res.json();
+      const versionSpan = byId("appVersionFooter");
+      if (versionSpan) {
+        versionSpan.textContent = ` v${data.version}`;
+      }
+    }
+  } catch (err) {
+    console.warn("Failed to load version:", err);
+  }
+}
+
 function syncLayoutVisibility() {
   const layout = document.querySelector(".layout");
   const leftPanel = byId("leftPanel");
@@ -1518,6 +1533,7 @@ function wireEvents() {
 async function initializeApp() {
   toggleAppLoggedIn(false);
   initializeTheme();
+  await loadAndDisplayVersion();
   setupLayoutResizers();
   wireEvents();
   syncLayoutVisibility();

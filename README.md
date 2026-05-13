@@ -1,4 +1,4 @@
-# Serverroom Visualizer v0.8
+# Serverroom Visualizer v0.9.260513
 
 Kubernetes-ready web application for serverroom visualization and asset tracking with LDAP authentication.
 
@@ -6,6 +6,9 @@ Kubernetes-ready web application for serverroom visualization and asset tracking
 
 - LDAP login via username/password and JWT session token.
 - Local users stored in database, including admin-managed user creation.
+- Time-based One-Time Password (TOTP) 2FA for local users.
+- Device search results with automatic focus to matching rack and device.
+- Excel export of device inventory with formatted headers and data.
 - PostgreSQL persistence.
 - Dedicated login screen before app workspace becomes visible.
 - Multiple serverrooms with switching support.
@@ -13,12 +16,17 @@ Kubernetes-ready web application for serverroom visualization and asset tracking
 - Rack naming and geometry updates.
 - Device assignment to rack by U position and U height with overlap prevention.
 - Drag and drop devices into rack U slots.
+- Mount side tracking (front/back) for each device.
 - Inventory templates (built-in and custom) with front image support.
 - Inventory manager is hidden behind top menu and provides list + preview + quick add to selected rack.
 - Built-in templates include Dell/HPE servers and Cisco/Brocade switches.
 - Double-click rack device block to edit operational metadata (mgmt IP, hostname, host IP, SSH endpoint, serial, notes).
-- Device metadata fields (serial number, management IP, model, custom properties).
+- Device archiving (soft-delete) with searchable archive status.
 - Audit trail for create/update/delete changes.
+- Demo seeding: each serverroom gets a floorplan with 2 rows x 8 racks and sample device data.
+- Dark mode toggle with persistent local storage.
+- Responsive design with resizable left/right panels.
+- GitHub Actions CI pipeline with Docker build and smoke test
 - Demo seeding: each serverroom gets a floorplan with 2 rows x 8 racks and sample device data.
 
 ## Stack
