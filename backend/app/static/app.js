@@ -4,8 +4,6 @@ const state = {
   role: null,
   authSource: null,
   expiresAt: null,
-  serverrooms: [],
-  selectedServerroomId: null,
   floorplans: [],
   selectedFloorplanId: null,
   selectedRackId: null,
@@ -425,22 +423,17 @@ async function downloadFile(path, fallbackFilename) {
   window.URL.revokeObjectURL(url);
 }
 
-async function exportSelectedServerroomXlsx() {
-  if (!state.selectedServerroomId) {
-    throw new Error("Select a serverroom first");
+async function exportFloorplanXlsx() {
+  const floorplan = selectedFloorplan();
+  if (!floorplan) {
+    throw new Error("Select a floorplan first");
   }
-
-  const room = state.serverrooms.find((candidate) => candidate.id === state.selectedServerroomId);
-  const safeName = (room?.name || "serverroom").replace(/[^A-Za-z0-9._-]+/g, "-");
-  await downloadFile(`/api/serverrooms/${state.selectedServerroomId}/export.xlsx`, `${safeName || "serverroom"}.xlsx`);
+  const safeName = (floorplan.name || "floorplan").replace(/[^A-Za-z0-9._-]+/g, "-");
+  await downloadFile(`/api/floorplans/${floorplan.id}/export.xlsx`, `${safeName || "floorplan"}.xlsx`);
 }
 
 function selectedFloorplan() {
   return state.floorplans.find((fp) => fp.id === state.selectedFloorplanId) || null;
-}
-
-function selectedServerroom() {
-  return state.serverrooms.find((r) => r.id === state.selectedServerroomId) || null;
 }
 
 function selectedRack() {
@@ -486,20 +479,6 @@ function toggleAppLoggedIn(isLoggedIn) {
   byId("loginGate").hidden = isLoggedIn;
   byId("appShell").hidden = !isLoggedIn;
   syncLayoutVisibility();
-}
-
-function renderServerrooms() {
-  const select = byId("serverroomSelect");
-  select.innerHTML = "";
-  for (const room of state.serverrooms) {
-    const option = document.createElement("option");
-    option.value = String(room.id);
-    option.textContent = room.name;
-    if (room.id === state.selectedServerroomId) {
-      option.selected = true;
-    }
-    select.appendChild(option);
-  }
 }
 
 function renderFloorplans() {
@@ -1113,7 +1092,6 @@ function renderLocalUsersSection() {
 }
 
 function renderEverything() {
-  renderServerrooms();
   renderFloorplans();
   renderCanvas();
   renderDevicesTable();
@@ -1147,12 +1125,7 @@ async function refreshAudit() {
 }
 
 async function refreshData() {
-  state.serverrooms = await api("/api/serverrooms");
-  if (!state.selectedServerroomId && state.serverrooms.length > 0) {
-    state.selectedServerroomId = state.serverrooms[0].id;
-  }
-
-  state.floorplans = await api(`/api/floorplans?serverroom_id=${state.selectedServerroomId}`);
+  state.floorplans = await api("/api/floorplans");
   if (!state.selectedFloorplanId && state.floorplans.length > 0) {
     state.selectedFloorplanId = state.floorplans[0].id;
   }
@@ -1233,26 +1206,7 @@ function wireEvents() {
     }
   });
 
-  byId("createServerroomBtn").addEventListener("click", async () => {
-    const name = byId("serverroomName").value.trim();
-    if (!name) return;
-    await api("/api/serverrooms", {
-      method: "POST",
-      body: JSON.stringify({ name, description: "" }),
-    });
-    byId("serverroomName").value = "";
-    await refreshData();
-  });
-
-  byId("serverroomSelect").addEventListener("change", async (evt) => {
-    state.selectedServerroomId = Number(evt.target.value);
-    state.selectedFloorplanId = null;
-    state.selectedRackId = null;
-    await refreshData();
-  });
-
   byId("createFloorplanBtn").addEventListener("click", () => {
-    if (!state.selectedServerroomId) return;
     // Show the wizard modal
     byId("floorplanWizardModal").hidden = false;
     byId("wizardFloorplanName").focus();
@@ -1281,8 +1235,6 @@ function wireEvents() {
   });
 
   byId("wizardCreateBtn").addEventListener("click", async () => {
-    if (!state.selectedServerroomId) return;
-    
     const name = byId("wizardFloorplanName").value.trim() || "Floor 1";
     const rows = Number(byId("wizardRows").value);
     const racksPerRow = Number(byId("wizardRacksPerRow").value);
@@ -1298,7 +1250,6 @@ function wireEvents() {
     const floorplan = await api("/api/floorplans", {
       method: "POST",
       body: JSON.stringify({
-        serverroom_id: state.selectedServerroomId,
         name: name,
         width: dims.width,
         height: dims.height,
@@ -1384,17 +1335,6 @@ function wireEvents() {
     await refreshData();
   });
 
-  byId("deleteServerroomBtn").addEventListener("click", async () => {
-    const serverroom = selectedServerroom();
-    if (!serverroom) return;
-    if (!confirm(`Delete serverroom "${serverroom.name}" and all its floorplans?`)) return;
-    await api(`/api/serverrooms/${serverroom.id}`, { method: "DELETE" });
-    state.selectedServerroomId = null;
-    state.selectedFloorplanId = null;
-    state.selectedRackId = null;
-    await refreshData();
-  });
-
   byId("createTemplateBtn").addEventListener("click", async () => {
     const payload = {
       vendor: byId("templateVendor").value.trim(),
@@ -1458,11 +1398,6 @@ function wireEvents() {
     closeDeviceModal();
   });
 
-  byId("menuAddServerroomBtn").addEventListener("click", () => {
-    closeTopMenus();
-    byId("serverroomName").focus();
-  });
-
   byId("menuAddFloorplanBtn").addEventListener("click", () => {
     closeTopMenus();
     byId("floorplanName").focus();
@@ -1498,7 +1433,7 @@ function wireEvents() {
   byId("menuExportXlsxBtn").addEventListener("click", async () => {
     closeTopMenus();
     try {
-      await exportSelectedServerroomXlsx();
+      await exportFloorplanXlsx();
       authStatus.textContent = "XLSX export downloaded";
     } catch (err) {
       authStatus.textContent = err.message;
@@ -1687,7 +1622,6 @@ function wireEvents() {
         body: JSON.stringify({ password }),
       });
       byId("clearAllDataModal").hidden = true;
-      state.selectedServerroomId = null;
       state.selectedFloorplanId = null;
       state.selectedRackId = null;
       state.editingDeviceId = null;

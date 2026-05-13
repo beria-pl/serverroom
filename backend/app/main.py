@@ -39,8 +39,6 @@ from .models import (
     InventoryDevice,
     LocalUser,
     Rack,
-    ServerRoom,
-    ServerRoomFloorplan,
 )
 from .schemas import (
     AuditOut,
@@ -60,8 +58,6 @@ from .schemas import (
     RackCreate,
     RackOut,
     RackUpdate,
-    ServerRoomCreate,
-    ServerRoomOut,
     TwoFactorCodeRequest,
     TwoFactorSetupOut,
     TwoFactorStatusOut,
@@ -191,24 +187,17 @@ def apply_rack_device_merges(sheet, rack: Rack, data_start_row: int, end_column:
             sheet.cell(row=top_row, column=column).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
-def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
+def build_floorplan_export_workbook(floorplan: Floorplan) -> BytesIO:
     workbook = Workbook()
     workbook.remove(workbook.active)
     used_sheet_names: set[str] = set()
 
-    floorplans = sorted(
-        [link.floorplan for link in room.floorplan_links if link.floorplan],
-        key=lambda floorplan: floorplan.id,
-    )
-    racks = sorted(
-        [rack for floorplan in floorplans for rack in floorplan.racks],
-        key=lambda rack: (rack.name.lower(), rack.id),
-    )
+    racks = sorted(floorplan.racks, key=lambda rack: (rack.name.lower(), rack.id))
 
     if not racks:
         sheet = workbook.create_sheet(title="Rack_Export")
-        sheet.append(["Serverroom", room.name])
-        sheet.append(["Message", "No racks found for this serverroom"])
+        sheet.append(["Floorplan", floorplan.name])
+        sheet.append(["Message", "No racks found for this floorplan"])
     else:
         header = [
             "U",
@@ -230,9 +219,7 @@ def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
         for rack in racks:
             sheet_name = unique_sheet_name(rack.name, used_sheet_names, f"Rack_{rack.id}")
             sheet = workbook.create_sheet(title=sheet_name)
-            floorplan_name = rack.floorplan.name if rack.floorplan else ""
-            sheet.append(["Serverroom", room.name])
-            sheet.append(["Floorplan", floorplan_name])
+            sheet.append(["Floorplan", floorplan.name])
             sheet.append(["Rack", rack.name])
             sheet.append(["Units", rack.units])
             sheet.append([])
@@ -258,10 +245,10 @@ def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
                     ]
                 )
 
-            data_start_row = 7
+            data_start_row = 6
             apply_rack_device_merges(sheet, rack, data_start_row=data_start_row, end_column=len(header))
 
-            for cell in sheet[6]:
+            for cell in sheet[5]:
                 cell.font = Font(bold=True)
                 cell.alignment = Alignment(horizontal="center")
 
@@ -269,20 +256,8 @@ def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
                 sheet.cell(row=row_index, column=1).alignment = Alignment(horizontal="center", vertical="center")
 
             column_widths = {
-                "A": 8,
-                "B": 28,
-                "C": 14,
-                "D": 20,
-                "E": 18,
-                "F": 18,
-                "G": 18,
-                "H": 12,
-                "I": 14,
-                "J": 14,
-                "K": 22,
-                "L": 18,
-                "M": 28,
-                "N": 36,
+                "A": 8, "B": 28, "C": 14, "D": 20, "E": 18, "F": 18,
+                "G": 18, "H": 12, "I": 14, "J": 14, "K": 22, "L": 18, "M": 28, "N": 36,
             }
             for column_name, width in column_widths.items():
                 sheet.column_dimensions[column_name].width = width
@@ -293,9 +268,9 @@ def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
     return output
 
 
-def export_filename_for_serverroom(room_name: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", room_name.strip()).strip("-._")
-    return f"{slug or 'serverroom'}.xlsx"
+def export_filename_for_floorplan(floorplan_name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", floorplan_name.strip()).strip("-._")
+    return f"{slug or 'floorplan'}.xlsx"
 
 
 def build_demo_serial(rng: random.Random) -> str:
@@ -360,22 +335,7 @@ def seed_demo_devices_for_rack(db: Session, rack: Rack, device_models: list[Devi
         item_index += 1
 
 
-def ensure_demo_layout_for_serverroom(db: Session, room: ServerRoom) -> None:
-    room_link = (
-        db.query(ServerRoomFloorplan)
-        .options(joinedload(ServerRoomFloorplan.floorplan))
-        .filter(ServerRoomFloorplan.serverroom_id == room.id)
-        .first()
-    )
-
-    if room_link is None:
-        floorplan = Floorplan(name=f"{room.name} Floor", width=1000, height=640)
-        db.add(floorplan)
-        db.flush()
-        db.add(ServerRoomFloorplan(serverroom_id=room.id, floorplan_id=floorplan.id))
-    else:
-        floorplan = room_link.floorplan
-
+def ensure_demo_floorplan(db: Session, floorplan: Floorplan) -> None:
     rack_names = [f"A{i:02d}" for i in range(1, 9)] + [f"B{i:02d}" for i in range(1, 9)]
     existing_racks = db.query(Rack).filter(Rack.floorplan_id == floorplan.id).order_by(Rack.id.asc()).all()
     existing_by_name = {rack.name: rack for rack in existing_racks}
@@ -398,26 +358,13 @@ def ensure_demo_layout_for_serverroom(db: Session, room: ServerRoom) -> None:
             rack = Rack(
                 floorplan_id=floorplan.id,
                 name=rack_name,
-                x=x,
-                y=y,
-                width=width,
-                height=height,
-                units=42,
-                orientation="top",
+                x=x, y=y, width=width, height=height,
+                units=42, orientation="top",
             )
             db.add(rack)
         else:
             rack.x = x
             rack.y = y
-            rack.width = width
-            rack.height = height
-            rack.orientation = "top"
-
-    # Normalize older front-view racks so floorplan remains readable in top-view mode.
-    for rack in existing_racks:
-        if rack.name in rack_names:
-            continue
-        if rack.height > 60 or rack.width > 90:
             rack.width = width
             rack.height = height
             rack.orientation = "top"
@@ -428,15 +375,7 @@ def ensure_demo_layout_for_serverroom(db: Session, room: ServerRoom) -> None:
     if models:
         racks = db.query(Rack).filter(Rack.floorplan_id == floorplan.id).order_by(Rack.id.asc()).all()
         for rack in racks:
-            seed_demo_devices_for_rack(db, rack, models, seed=(room.id * 1000) + rack.id)
-
-
-def ensure_demo_layout_all_serverrooms(db: Session) -> None:
-    rooms = db.query(ServerRoom).order_by(ServerRoom.id.asc()).all()
-    for room in rooms:
-        ensure_demo_layout_for_serverroom(db, room)
-
-    db.commit()
+            seed_demo_devices_for_rack(db, rack, models, seed=(floorplan.id * 1000) + rack.id)
 
 
 def ensure_demo_mount_side_mix(db: Session) -> None:
@@ -514,12 +453,14 @@ def ensure_builtin_device_models(db: Session) -> None:
 
 with Session(bind=engine) as bootstrap_db:
     ensure_bootstrap_admin(bootstrap_db)
-    if bootstrap_db.query(ServerRoom).count() == 0:
-        bootstrap_db.add(ServerRoom(name="Main Serverroom", description="Default serverroom"))
-        bootstrap_db.commit()
     ensure_builtin_device_models(bootstrap_db)
-    ensure_demo_layout_all_serverrooms(bootstrap_db)
+    if bootstrap_db.query(Floorplan).count() == 0:
+        demo_floorplan = Floorplan(name="Main Floor", width=1000, height=640)
+        bootstrap_db.add(demo_floorplan)
+        bootstrap_db.flush()
+        ensure_demo_floorplan(bootstrap_db, demo_floorplan)
     ensure_demo_mount_side_mix(bootstrap_db)
+    bootstrap_db.commit()
 
 app = FastAPI(title=settings.app_name)
 
@@ -672,12 +613,6 @@ def disable_two_factor(
     return TwoFactorStatusOut(available=True, enabled=False, setup_pending=False)
 
 
-def map_floorplan_serverroom_id(floorplan: Floorplan) -> int | None:
-    if not floorplan.serverroom_links:
-        return None
-    return floorplan.serverroom_links[0].serverroom_id
-
-
 def normalize_csv_key(value: str) -> str:
     return "".join(ch for ch in value.strip().lower() if ch.isalnum())
 
@@ -714,21 +649,8 @@ def parse_csv_upload(file: UploadFile) -> list[dict[str, str]]:
     return list(reader)
 
 
-def find_serverroom_by_name(db: Session, name: str) -> ServerRoom | None:
-    needle = name.strip().lower()
-    if needle == "":
-        return None
-    return db.query(ServerRoom).filter(ServerRoom.name.ilike(name.strip())).first()
-
-
-def find_floorplan_by_room_and_name(db: Session, room_id: int, floor_name: str) -> Floorplan | None:
-    return (
-        db.query(Floorplan)
-        .join(ServerRoomFloorplan, ServerRoomFloorplan.floorplan_id == Floorplan.id)
-        .filter(ServerRoomFloorplan.serverroom_id == room_id)
-        .filter(Floorplan.name.ilike(floor_name.strip()))
-        .first()
-    )
+def find_floorplan_by_name(db: Session, floor_name: str) -> Floorplan | None:
+    return db.query(Floorplan).filter(Floorplan.name.ilike(floor_name.strip())).first()
 
 
 def find_rack_by_floorplan_and_name(db: Session, floorplan_id: int, rack_name: str) -> Rack | None:
@@ -828,101 +750,33 @@ def ensure_serial_not_archived(db: Session, serial_number: str | None) -> None:
         raise HTTPException(status_code=409, detail=f"Device serial '{serial}' is archived and cannot be assigned")
 
 
-@app.get("/api/serverrooms", response_model=list[ServerRoomOut])
-def list_serverrooms(
-    db: Session = Depends(get_db),
-    _: str = Depends(get_current_user),
-) -> list[ServerRoomOut]:
-    return db.query(ServerRoom).order_by(ServerRoom.name.asc()).all()
 
 
-@app.get("/api/serverrooms/{serverroom_id}/export.xlsx")
-def export_serverroom_xlsx(
-    serverroom_id: int,
+@app.get("/api/floorplans/{floorplan_id}/export.xlsx")
+def export_floorplan_xlsx(
+    floorplan_id: int,
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> StreamingResponse:
-    room = (
-        db.query(ServerRoom)
+    floorplan = (
+        db.query(Floorplan)
         .options(
-            joinedload(ServerRoom.floorplan_links)
-            .joinedload(ServerRoomFloorplan.floorplan)
-            .joinedload(Floorplan.racks)
-            .joinedload(Rack.devices),
-            joinedload(ServerRoom.floorplan_links)
-            .joinedload(ServerRoomFloorplan.floorplan)
-            .joinedload(Floorplan.racks)
-            .joinedload(Rack.floorplan),
+            joinedload(Floorplan.racks).joinedload(Rack.devices),
         )
-        .filter(ServerRoom.id == serverroom_id)
+        .filter(Floorplan.id == floorplan_id)
         .first()
     )
-    if not room:
-        raise HTTPException(status_code=404, detail="Serverroom not found")
+    if not floorplan:
+        raise HTTPException(status_code=404, detail="Floorplan not found")
 
-    workbook = build_serverroom_export_workbook(room)
-    filename = export_filename_for_serverroom(room.name)
+    workbook = build_floorplan_export_workbook(floorplan)
+    filename = export_filename_for_floorplan(floorplan.name)
     headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
     return StreamingResponse(
         workbook,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers=headers,
     )
-
-
-@app.post("/api/serverrooms", response_model=ServerRoomOut)
-def create_serverroom(
-    payload: ServerRoomCreate,
-    db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
-) -> ServerRoomOut:
-    existing = db.query(ServerRoom).filter(ServerRoom.name == payload.name).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Serverroom name already exists")
-
-    room = ServerRoom(**payload.model_dump())
-    db.add(room)
-    db.flush()
-    write_audit(
-        db,
-        actor=user,
-        action="create",
-        entity_type="serverroom",
-        entity_id=str(room.id),
-        new_values=payload.model_dump(),
-    )
-    db.commit()
-    db.refresh(room)
-    ensure_demo_layout_for_serverroom(db, room)
-    db.commit()
-    return room
-
-
-@app.delete("/api/serverrooms/{serverroom_id}")
-def delete_serverroom(
-    serverroom_id: int,
-    db: Session = Depends(get_db),
-    user: str = Depends(get_current_user),
-) -> dict[str, bool]:
-    room = db.query(ServerRoom).filter(ServerRoom.id == serverroom_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Serverroom not found")
-
-    old_values = {
-        "name": room.name,
-        "description": room.description,
-    }
-    db.delete(room)
-    write_audit(
-        db,
-        actor=user,
-        action="delete",
-        entity_type="serverroom",
-        entity_id=str(serverroom_id),
-        old_values=old_values,
-    )
-    db.commit()
-    return {"ok": True}
 
 
 @app.get("/api/device-models", response_model=list[DeviceModelOut])
@@ -1012,29 +866,18 @@ def create_local_user(
 
 @app.get("/api/floorplans", response_model=list[FloorplanOut])
 def list_floorplans(
-    serverroom_id: int | None = None,
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ) -> list[FloorplanOut]:
-    query = (
+    floorplans = (
         db.query(Floorplan)
         .options(
             joinedload(Floorplan.racks).joinedload(Rack.devices),
-            joinedload(Floorplan.serverroom_links),
         )
         .order_by(Floorplan.id.asc())
+        .all()
     )
-
-    if serverroom_id is not None:
-        query = query.join(ServerRoomFloorplan).filter(ServerRoomFloorplan.serverroom_id == serverroom_id)
-
-    floorplans = query.all()
-    result: list[FloorplanOut] = []
-    for floorplan in floorplans:
-        out = FloorplanOut.model_validate(floorplan)
-        out.serverroom_id = map_floorplan_serverroom_id(floorplan)
-        result.append(out)
-    return result
+    return [FloorplanOut.model_validate(fp) for fp in floorplans]
 
 
 @app.post("/api/floorplans", response_model=FloorplanOut)
@@ -1043,14 +886,9 @@ def create_floorplan(
     db: Session = Depends(get_db),
     user: str = Depends(get_current_user),
 ) -> FloorplanOut:
-    room = db.query(ServerRoom).filter(ServerRoom.id == payload.serverroom_id).first()
-    if not room:
-        raise HTTPException(status_code=404, detail="Serverroom not found")
-
     floorplan = Floorplan(name=payload.name, width=payload.width, height=payload.height)
     db.add(floorplan)
     db.flush()
-    db.add(ServerRoomFloorplan(serverroom_id=payload.serverroom_id, floorplan_id=floorplan.id))
     write_audit(
         db,
         actor=user,
@@ -1061,9 +899,7 @@ def create_floorplan(
     )
     db.commit()
     db.refresh(floorplan)
-    out = FloorplanOut.model_validate(floorplan)
-    out.serverroom_id = payload.serverroom_id
-    return out
+    return FloorplanOut.model_validate(floorplan)
 
 
 @app.delete("/api/floorplans/{floorplan_id}")
@@ -1103,7 +939,6 @@ def update_floorplan(
 ) -> FloorplanOut:
     floorplan = (
         db.query(Floorplan)
-        .options(joinedload(Floorplan.serverroom_links))
         .filter(Floorplan.id == floorplan_id)
         .first()
     )
@@ -1125,9 +960,7 @@ def update_floorplan(
     )
     db.commit()
     db.refresh(floorplan)
-    out = FloorplanOut.model_validate(floorplan)
-    out.serverroom_id = map_floorplan_serverroom_id(floorplan)
-    return out
+    return FloorplanOut.model_validate(floorplan)
 
 
 @app.post("/api/racks", response_model=RackOut)
@@ -1541,14 +1374,13 @@ def import_layout_csv(
     cleared_rack_ids: set[int] = set()
 
     for idx, row in enumerate(rows, start=2):
-        room_name = csv_value(row, ["serverroom", "server_room", "room"])
         floor_name = csv_value(row, ["floor", "floorplan", "floor_name"])
         rack_name = csv_value(row, ["rackname", "rack", "rack_name"])
         serial = csv_value(row, ["serial_number", "serialnumber", "serial", "sn"])
 
-        if not room_name or not floor_name or not rack_name or not serial:
+        if not floor_name or not rack_name or not serial:
             errors.append(
-                f"line {idx}: required fields are serverroom, floor, rackname, serialnumber"
+                f"line {idx}: required fields are floor, rackname, serialnumber"
             )
             continue
 
@@ -1562,14 +1394,9 @@ def import_layout_csv(
             errors.append(f"line {idx}: u_position must be >= 1")
             continue
 
-        room = find_serverroom_by_name(db, room_name)
-        if room is None:
-            errors.append(f"line {idx}: serverroom '{room_name}' not found")
-            continue
-
-        floorplan = find_floorplan_by_room_and_name(db, room.id, floor_name)
+        floorplan = find_floorplan_by_name(db, floor_name)
         if floorplan is None:
-            errors.append(f"line {idx}: floor '{floor_name}' not found in serverroom '{room_name}'")
+            errors.append(f"line {idx}: floor '{floor_name}' not found")
             continue
 
         rack = find_rack_by_floorplan_and_name(db, floorplan.id, rack_name)
@@ -1682,9 +1509,7 @@ def clear_all_data(
     db.query(AuditLog).delete()
     db.query(Device).delete()
     db.query(Rack).delete()
-    db.query(ServerRoomFloorplan).delete()
     db.query(Floorplan).delete()
-    db.query(ServerRoom).delete()
     db.query(InventoryDevice).delete()
     db.query(DeviceModel).delete()
 

@@ -87,7 +87,7 @@ class FloorplanBase(BaseModel):
 
 
 class FloorplanCreate(FloorplanBase):
-    serverroom_id: int
+    pass
 
 
 class FloorplanUpdate(FloorplanBase):
@@ -96,7 +96,6 @@ class FloorplanUpdate(FloorplanBase):
 
 class FloorplanOut(FloorplanBase):
     id: int
-    serverroom_id: int | None = None
     racks: list[RackOut] = []
 
     class Config:
@@ -149,23 +148,6 @@ class TwoFactorSetupOut(BaseModel):
 
 class TwoFactorCodeRequest(BaseModel):
     otp_code: str = Field(min_length=6, max_length=8)
-
-
-class ServerRoomBase(BaseModel):
-    name: str
-    description: str | None = None
-
-
-class ServerRoomCreate(ServerRoomBase):
-    pass
-
-
-class ServerRoomOut(ServerRoomBase):
-    id: int
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 class DeviceModelBase(BaseModel):

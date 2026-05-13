@@ -15,7 +15,6 @@ class Floorplan(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    serverroom_links = relationship("ServerRoomFloorplan", back_populates="floorplan", cascade="all, delete-orphan")
     racks = relationship("Rack", back_populates="floorplan", cascade="all, delete-orphan")
 
 
@@ -83,30 +82,6 @@ class LocalUser(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
-class ServerRoom(Base):
-    __tablename__ = "serverrooms"
-
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(128), nullable=False, unique=True)
-    description = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    floorplan_links = relationship(
-        "ServerRoomFloorplan",
-        back_populates="serverroom",
-        cascade="all, delete-orphan",
-    )
-
-
-class ServerRoomFloorplan(Base):
-    __tablename__ = "serverroom_floorplans"
-
-    id = Column(Integer, primary_key=True, index=True)
-    serverroom_id = Column(Integer, ForeignKey("serverrooms.id", ondelete="CASCADE"), nullable=False)
-    floorplan_id = Column(Integer, ForeignKey("floorplans.id", ondelete="CASCADE"), nullable=False, unique=True)
-
-    serverroom = relationship("ServerRoom", back_populates="floorplan_links")
-    floorplan = relationship("Floorplan", back_populates="serverroom_links")
 
 
 class DeviceModel(Base):

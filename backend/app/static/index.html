@@ -10,7 +10,7 @@
   <div id="loginGate" class="login-gate">
     <div class="login-card">
       <h1>Serverroom Visualizer <span class="app-version">v0.9.260513</span></h1>
-      <p>Login to manage serverrooms, racks, and inventory templates.</p>
+      <p>Login to manage floorplans, racks, and inventory templates.</p>
       <input id="username" placeholder="Username" />
       <input id="password" type="password" placeholder="Password" />
       <input id="otpCode" placeholder="2FA code (if enabled)" inputmode="numeric" autocomplete="one-time-code" />
@@ -54,7 +54,7 @@
         <button class="modal-close" data-close-modal="clearAllDataModal">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="color:#a42a2a;font-weight:600;">⚠ This will permanently delete all serverrooms, floorplans, racks, devices, and audit logs. User accounts will be preserved.</p>
+        <p style="color:#a42a2a;font-weight:600;">⚠ This will permanently delete all floorplans, racks, devices, and audit logs. User accounts will be preserved.</p>
         <div class="form-group">
           <label for="clearAllAdminPassword">Confirm your admin password:</label>
           <input id="clearAllAdminPassword" type="password" placeholder="Admin password" autocomplete="off" />
@@ -75,7 +75,6 @@
         <details>
           <summary>Inventory</summary>
           <div class="menu-popover">
-            <button id="menuAddServerroomBtn">Add Serverroom</button>
             <button id="menuAddFloorplanBtn">Add Floorplan</button>
             <button id="menuAddRackBtn">Add Rack</button>
             <button id="menuAddTemplateBtn">Add Device Template</button>
@@ -108,16 +107,6 @@
 
     <main class="layout">
       <section id="leftPanel" class="panel left">
-        <details class="panel-section">
-          <summary>Serverrooms</summary>
-          <div class="panel-section-body">
-            <div class="row split">
-              <input id="serverroomName" placeholder="New serverroom" />
-              <button id="createServerroomBtn">Create</button>
-            </div>
-            <select id="serverroomSelect" size="5"></select>            <button id="deleteServerroomBtn" class="btn-danger">Delete Selected Serverroom</button>          </div>
-        </details>
-
         <details class="panel-section">
           <summary>Floorplans</summary>
           <div class="panel-section-body">
@@ -352,7 +341,7 @@
 
       <section class="csv-import-section">
         <h3>Layout CSV</h3>
-        <p class="hint">Required columns: serverroom, floor, rackname, uposition, serialnumber.</p>
+        <p class="hint">Required columns: floor, rackname, uposition, serialnumber.</p>
         <p class="hint">Layout import clears existing devices in targeted racks before placing imported devices.</p>
         <div class="row split">
           <input id="layoutCsvFile" type="file" accept=".csv,text/csv" />
