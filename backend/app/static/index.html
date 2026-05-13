@@ -123,9 +123,9 @@
               <input id="rackName" placeholder="Rack name" />
             </div>
             <button id="addRackBtn">Add Rack at Center</button>
-            <button id="saveRackBtn">Save Selected Rack Position</button>
+            <button id="saveRackBtn">Rename &amp; Save Rack</button>
             <button id="deleteRackBtn">Delete Selected Rack</button>
-            <p class="hint">Drag rack blocks directly on the floorplan.</p>
+            <p class="hint">Select a rack to rename it. Drag rack blocks to reposition.</p>
           </div>
         </details>
 
@@ -160,6 +160,16 @@
             <div id="deviceDockForm" hidden>
               <div class="row split">
                 <div class="field-group">
+                  <input id="modalUPosition" type="number" min="1" placeholder="U position" />
+                  <div class="field-help">U slot where the device starts (bottom).</div>
+                </div>
+                <div class="field-group">
+                  <input id="modalUHeight" type="number" min="1" placeholder="U height" />
+                  <div class="field-help">How many rack units the device occupies.</div>
+                </div>
+              </div>
+              <div class="row split">
+                <div class="field-group">
                   <input id="modalDeviceName" placeholder="Device name" />
                   <div class="field-help">Display name shown on the rack block.</div>
                 </div>
@@ -186,16 +196,6 @@
                 <div class="field-group">
                   <input id="modalSerial" placeholder="Serial number" />
                   <div class="field-help">Vendor serial number for tracking.</div>
-                </div>
-              </div>
-              <div class="row split">
-                <div class="field-group">
-                  <input id="modalUPosition" type="number" min="1" placeholder="U position" />
-                  <div class="field-help">Bottom U slot where the device starts.</div>
-                </div>
-                <div class="field-group">
-                  <input id="modalUHeight" type="number" min="1" placeholder="U height" />
-                  <div class="field-help">How many rack units the device occupies.</div>
                 </div>
               </div>
               <div class="row split">

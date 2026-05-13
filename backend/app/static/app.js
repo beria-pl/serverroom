@@ -51,12 +51,12 @@ function calculateFloorplanDimensions(numRows, racksPerRow) {
   const maxCanvasWidth = 1200;  // pixels for FullHD minus left/right panels and scrollbars
   const maxCanvasHeight = 880;  // pixels for FullHD minus top bar and margins
   
-  // Standard rack dimensions
-  const rackWidth = 80;
-  const rackHeight = 220;
+  // Standard rack dimensions in top-view (small footprint)
+  const rackWidth = 50;
+  const rackHeight = 50;
   
   // Calculate spacing to fit racks with some padding
-  const paddingPerRack = 20;  // pixels between racks
+  const paddingPerRack = 16;  // pixels between racks
   const marginTop = 30;
   const marginLeft = 30;
   
@@ -84,8 +84,8 @@ function createRackGrid(numRows, racksPerRow, floorplanId) {
   const racks = [];
   const dims = calculateFloorplanDimensions(numRows, racksPerRow);
   
-  const rackWidth = 80;
-  const rackHeight = 220;
+  const rackWidth = 50;
+  const rackHeight = 50;
   
   for (let row = 0; row < numRows; row++) {
     for (let col = 0; col < racksPerRow; col++) {
@@ -100,7 +100,7 @@ function createRackGrid(numRows, racksPerRow, floorplanId) {
         width: rackWidth,
         height: rackHeight,
         units: 42,
-        orientation: "front",
+        orientation: "top",
       });
     }
   }
@@ -873,6 +873,12 @@ function renderRackEditor() {
   if (title) {
     title.textContent = rack ? `${rack.name} Rack U Layout` : "Rack U Layout";
   }
+  // Populate rack name input so it can be edited and saved
+  const rackNameInput = byId("rackName");
+  if (rackNameInput) {
+    rackNameInput.value = rack ? rack.name : "";
+    rackNameInput.placeholder = rack ? "Edit to rename" : "Rack name";
+  }
   if (!rack) {
     editor.innerHTML = "<p class='hint'>Select a rack to edit U placement.</p>";
     return;
@@ -1302,10 +1308,11 @@ function wireEvents() {
   byId("saveRackBtn").addEventListener("click", async () => {
     const rack = selectedRack();
     if (!rack) return;
+    const newName = byId("rackName").value.trim() || rack.name;
     await api(`/api/racks/${rack.id}`, {
       method: "PUT",
       body: JSON.stringify({
-        name: rack.name,
+        name: newName,
         x: rack.x,
         y: rack.y,
         width: rack.width,
