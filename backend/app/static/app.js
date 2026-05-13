@@ -439,6 +439,10 @@ function selectedFloorplan() {
   return state.floorplans.find((fp) => fp.id === state.selectedFloorplanId) || null;
 }
 
+function selectedServerroom() {
+  return state.serverrooms.find((r) => r.id === state.selectedServerroomId) || null;
+}
+
 function selectedRack() {
   const floorplan = selectedFloorplan();
   if (!floorplan) return null;
@@ -1645,6 +1649,54 @@ function wireEvents() {
     closeTopMenus();
     state.showLocalUsers = !state.showLocalUsers;
     renderLocalUsersSection();
+  });
+
+  byId("menuClearAllDataBtn").addEventListener("click", () => {
+    closeTopMenus();
+    if (state.role !== "admin") {
+      authStatus.textContent = "Only admin users can clear data.";
+      return;
+    }
+    byId("clearAllAdminPassword").value = "";
+    byId("clearAllStatus").textContent = "";
+    byId("clearAllDataModal").hidden = false;
+    byId("clearAllAdminPassword").focus();
+  });
+
+  byId("clearAllCancelBtn").addEventListener("click", () => {
+    byId("clearAllDataModal").hidden = true;
+  });
+
+  byId("clearAllDataModal").addEventListener("click", (evt) => {
+    if (evt.target.dataset.closeModal === "clearAllDataModal") {
+      byId("clearAllDataModal").hidden = true;
+    }
+  });
+
+  byId("clearAllConfirmBtn").addEventListener("click", async () => {
+    const password = byId("clearAllAdminPassword").value;
+    if (!password) {
+      byId("clearAllStatus").textContent = "Password is required.";
+      return;
+    }
+    byId("clearAllConfirmBtn").disabled = true;
+    byId("clearAllStatus").textContent = "Deleting...";
+    try {
+      await api("/api/admin/clear-all-data", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      byId("clearAllDataModal").hidden = true;
+      state.selectedServerroomId = null;
+      state.selectedFloorplanId = null;
+      state.selectedRackId = null;
+      state.editingDeviceId = null;
+      await refreshData();
+    } catch (err) {
+      byId("clearAllStatus").textContent = err.message || "Failed. Check password.";
+    } finally {
+      byId("clearAllConfirmBtn").disabled = false;
+    }
   });
 
   byId("darkModeToggleBtn").addEventListener("click", () => {

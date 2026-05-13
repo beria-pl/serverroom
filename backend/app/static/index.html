@@ -47,6 +47,27 @@
     </div>
   </div>
 
+  <div id="clearAllDataModal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Clear All Data</h2>
+        <button class="modal-close" data-close-modal="clearAllDataModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:#a42a2a;font-weight:600;">⚠ This will permanently delete all serverrooms, floorplans, racks, devices, and audit logs. User accounts will be preserved.</p>
+        <div class="form-group">
+          <label for="clearAllAdminPassword">Confirm your admin password:</label>
+          <input id="clearAllAdminPassword" type="password" placeholder="Admin password" autocomplete="off" />
+        </div>
+        <p class="hint" id="clearAllStatus"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="clearAllCancelBtn" class="btn-secondary">Cancel</button>
+        <button id="clearAllConfirmBtn" class="btn-danger">Delete Everything</button>
+      </div>
+    </div>
+  </div>
+
   <div id="appShell" hidden>
     <header class="topbar">
       <h1>Serverroom Visualizer <span class="app-version">v0.9.260513</span></h1>
@@ -76,6 +97,7 @@
           <summary>Admin</summary>
           <div class="menu-popover">
             <button id="menuToggleLocalUsersBtn">Local Users</button>
+            <button id="menuClearAllDataBtn">Clear All Data</button>
           </div>
         </details>
       </nav>

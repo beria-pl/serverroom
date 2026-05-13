@@ -19,6 +19,10 @@ class LoginRequest(BaseModel):
     otp_code: str | None = None
 
 
+class PasswordConfirmRequest(BaseModel):
+    password: str
+
+
 class DeviceBase(BaseModel):
     name: str
     device_type: str

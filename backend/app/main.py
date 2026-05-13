@@ -55,6 +55,7 @@ from .schemas import (
     LocalUserCreate,
     LocalUserOut,
     LoginRequest,
+    PasswordConfirmRequest,
     InventoryDeviceOut,
     RackCreate,
     RackOut,
@@ -1664,3 +1665,36 @@ def list_audit(
 ) -> list[AuditOut]:
     logs = db.query(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit).all()
     return logs
+
+
+@app.post("/api/admin/clear-all-data")
+def clear_all_data(
+    payload: PasswordConfirmRequest,
+    db: Session = Depends(get_db),
+    user: str = Depends(require_admin),
+) -> dict[str, bool]:
+    # Re-authenticate the admin with provided password to confirm intent
+    admin_user = authenticate_local_user(db, user, payload.password)
+    if not admin_user or admin_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Invalid admin password")
+
+    # Delete all data except local users in dependency order
+    db.query(AuditLog).delete()
+    db.query(Device).delete()
+    db.query(Rack).delete()
+    db.query(ServerRoomFloorplan).delete()
+    db.query(Floorplan).delete()
+    db.query(ServerRoom).delete()
+    db.query(InventoryDevice).delete()
+    db.query(DeviceModel).delete()
+
+    write_audit(
+        db,
+        actor=user,
+        action="clear-all",
+        entity_type="system",
+        entity_id="*",
+        old_values={"note": "All data cleared by admin"},
+    )
+    db.commit()
+    return {"ok": True}
