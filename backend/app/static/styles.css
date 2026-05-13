@@ -122,6 +122,13 @@ body.theme-dark .device-search-item.archived {
   background: #1b2634;
 }
 
+body.theme-dark #twoFactorSecret,
+body.theme-dark #twoFactorUri {
+  background: #111923;
+  color: var(--text);
+  border-color: var(--line);
+}
+
 body.theme-dark .webgui-footer a {
   color: #a9b6c5;
 }
@@ -549,6 +556,12 @@ button:hover {
   overflow: hidden;
 }
 
+.device-block.selected {
+  outline: 3px solid rgba(196, 69, 54, 0.95);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.65), 0 0 18px rgba(196, 69, 54, 0.35);
+}
+
 .device-block.back {
   background: linear-gradient(140deg, #94511d, var(--device-back));
   border-color: #6f3b15;
@@ -664,6 +677,12 @@ button:hover {
   border-radius: 6px;
   padding: 7px;
   resize: vertical;
+}
+
+#twoFactorSecret,
+#twoFactorUri {
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  font-size: 0.84rem;
 }
 
 .btn-secondary {

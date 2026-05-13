@@ -10,11 +10,13 @@ class TokenResponse(BaseModel):
     username: str
     role: str
     auth_source: str
+    expires_at: datetime
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+    otp_code: str | None = None
 
 
 class DeviceBase(BaseModel):
@@ -123,10 +125,26 @@ class LocalUserOut(BaseModel):
     username: str
     role: str
     is_active: int
+    totp_enabled: int
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class TwoFactorStatusOut(BaseModel):
+    available: bool
+    enabled: bool
+    setup_pending: bool = False
+
+
+class TwoFactorSetupOut(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class TwoFactorCodeRequest(BaseModel):
+    otp_code: str = Field(min_length=6, max_length=8)
 
 
 class ServerRoomBase(BaseModel):

@@ -3,6 +3,7 @@ const state = {
   username: null,
   role: null,
   authSource: null,
+  expiresAt: null,
   serverrooms: [],
   selectedServerroomId: null,
   floorplans: [],
@@ -16,7 +17,10 @@ const state = {
   selectedDeviceModelId: null,
   darkMode: false,
   deviceDragInProgress: false,
+  twoFactorStatus: null,
 };
+
+const SESSION_STORAGE_KEY = "serverroom-session";
 
 const byId = (id) => document.getElementById(id);
 
@@ -126,6 +130,138 @@ function closeTopMenus(except = null) {
   }
 }
 
+function sessionPayload() {
+  return {
+    token: state.token,
+    username: state.username,
+    role: state.role,
+    authSource: state.authSource,
+    expiresAt: state.expiresAt,
+  };
+}
+
+function updateSessionInfo() {
+  const sessionInfo = byId("sessionInfo");
+  if (!state.token) {
+    sessionInfo.textContent = "Authenticated";
+    return;
+  }
+
+  const expirySuffix = state.expiresAt
+    ? `, expires ${new Date(state.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  sessionInfo.textContent = `${state.username} (${state.role}, ${state.authSource}${expirySuffix})`;
+}
+
+function persistSession() {
+  if (!state.token) {
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    return;
+  }
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionPayload()));
+}
+
+function applySession(session) {
+  state.token = session.token;
+  state.username = session.username;
+  state.role = session.role;
+  state.authSource = session.authSource;
+  state.expiresAt = session.expiresAt;
+  updateSessionInfo();
+  toggleAppLoggedIn(true);
+}
+
+function clearSession(message = "Not logged in") {
+  state.token = null;
+  state.username = null;
+  state.role = null;
+  state.authSource = null;
+  state.expiresAt = null;
+  state.twoFactorStatus = null;
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  updateSessionInfo();
+  toggleAppLoggedIn(false);
+  authStatus.textContent = message;
+}
+
+function sessionExpired(session) {
+  if (!session?.expiresAt) return true;
+  return new Date(session.expiresAt).getTime() <= Date.now();
+}
+
+async function restoreSession() {
+  const raw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (!raw) return;
+
+  try {
+    const session = JSON.parse(raw);
+    if (!session?.token || sessionExpired(session)) {
+      clearSession("Session expired. Please log in again.");
+      return;
+    }
+
+    applySession(session);
+    authStatus.textContent = "Session restored";
+    await refreshData();
+  } catch (_err) {
+    clearSession("Session restore failed. Please log in again.");
+  }
+}
+
+function normalizeOtpCode(value) {
+  return (value || "").replace(/\D+/g, "").slice(0, 6);
+}
+
+function renderTwoFactorStatus() {
+  const status = state.twoFactorStatus;
+  const statusText = byId("twoFactorStatusText");
+  const supportHint = byId("twoFactorSupportHint");
+  const controls = byId("twoFactorControls");
+  const setupPanel = byId("twoFactorSetupPanel");
+  const disablePanel = byId("twoFactorDisablePanel");
+  const setupBtn = byId("startTwoFactorSetupBtn");
+
+  if (!status) {
+    statusText.textContent = "2FA status unavailable.";
+    supportHint.textContent = "2FA setup is available for local accounts.";
+    controls.hidden = false;
+    setupPanel.hidden = true;
+    disablePanel.hidden = true;
+    setupBtn.disabled = false;
+    return;
+  }
+
+  if (!status.available) {
+    statusText.textContent = "2FA is available only for local accounts.";
+    supportHint.textContent = "You are logged in with LDAP, so local TOTP setup is not available in this UI.";
+    controls.hidden = true;
+    setupPanel.hidden = true;
+    disablePanel.hidden = true;
+    return;
+  }
+
+  controls.hidden = false;
+  supportHint.textContent = "The session remains valid for 60 minutes, including page refreshes, unless it expires.";
+  statusText.textContent = status.enabled
+    ? "2FA is enabled for this local account."
+    : status.setup_pending
+      ? "2FA setup is pending confirmation."
+      : "2FA is not enabled for this local account.";
+  setupBtn.disabled = status.enabled;
+  disablePanel.hidden = !status.enabled;
+  if (!status.setup_pending) {
+    byId("twoFactorSecret").value = "";
+    byId("twoFactorUri").value = "";
+    byId("twoFactorConfirmCode").value = "";
+    setupPanel.hidden = true;
+  }
+}
+
+async function refreshTwoFactorStatus() {
+  state.twoFactorStatus = await api("/api/auth/2fa/status");
+  renderTwoFactorStatus();
+}
+
 async function api(path, options = {}) {
   const headers = options.headers || {};
   if (state.token) {
@@ -136,6 +272,10 @@ async function api(path, options = {}) {
   }
 
   const response = await fetch(path, { ...options, headers });
+  if (response.status === 401 && state.token) {
+    clearSession("Session expired. Please log in again.");
+    throw new Error("Session expired. Please log in again.");
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(payload.detail || `Request failed: ${response.status}`);
@@ -166,11 +306,55 @@ async function uploadCsv(path, fileInputId) {
     headers,
     body: formData,
   });
+  if (response.status === 401 && state.token) {
+    clearSession("Session expired. Please log in again.");
+    throw new Error("Session expired. Please log in again.");
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(payload.detail || `CSV import failed: ${response.status}`);
   }
   return payload;
+}
+
+async function downloadFile(path, fallbackFilename) {
+  const headers = {};
+  if (state.token) {
+    headers.Authorization = `Bearer ${state.token}`;
+  }
+
+  const response = await fetch(path, { headers });
+  if (response.status === 401 && state.token) {
+    clearSession("Session expired. Please log in again.");
+    throw new Error("Session expired. Please log in again.");
+  }
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || `Download failed: ${response.status}`);
+  }
+
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="([^"]+)"/i);
+  const filename = match?.[1] || fallbackFilename;
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+async function exportSelectedServerroomXlsx() {
+  if (!state.selectedServerroomId) {
+    throw new Error("Select a serverroom first");
+  }
+
+  const room = state.serverrooms.find((candidate) => candidate.id === state.selectedServerroomId);
+  const safeName = (room?.name || "serverroom").replace(/[^A-Za-z0-9._-]+/g, "-");
+  await downloadFile(`/api/serverrooms/${state.selectedServerroomId}/export.xlsx`, `${safeName || "serverroom"}.xlsx`);
 }
 
 function selectedFloorplan() {
@@ -187,6 +371,33 @@ function selectedDevice() {
   const rack = selectedRack();
   if (!rack || !state.editingDeviceId) return null;
   return rack.devices.find((d) => d.id === state.editingDeviceId) || null;
+}
+
+function focusRackAndDevice(rackId, deviceId = null) {
+  const rack =
+    (state.floorplans || [])
+      .flatMap((floorplan) => floorplan.racks || [])
+      .find((candidate) => candidate.id === rackId) || null;
+  if (!rack) return;
+
+  state.selectedFloorplanId = rack.floorplan_id;
+  state.selectedRackId = rack.id;
+  state.editingDeviceId = deviceId;
+  renderEverything();
+
+  requestAnimationFrame(() => {
+    const editor = byId("rackEditor");
+    if (editor) {
+      editor.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    if (deviceId) {
+      const deviceNode = byId("rackEditor")?.querySelector(`[data-device-id='${deviceId}']`);
+      if (deviceNode && typeof deviceNode.scrollIntoView === "function") {
+        deviceNode.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      }
+    }
+  });
 }
 
 function toggleAppLoggedIn(isLoggedIn) {
@@ -473,8 +684,7 @@ function renderDeviceSearchList() {
       <div class="meta">Rack ${item.rack.name} | ${(item.device.mount_side || "front")} | U${item.device.u_position}-${item.device.u_position + item.device.u_height - 1} | ${item.device.serial_number || "NO-SN"}</div>
     `;
     node.addEventListener("click", () => {
-      state.selectedRackId = item.rack.id;
-      renderEverything();
+      focusRackAndDevice(item.rack.id, item.device.id);
     });
     list.appendChild(node);
   }
@@ -694,8 +904,12 @@ function renderRackEditor() {
   for (const d of rack.devices) {
     const block = document.createElement("div");
     block.className = "device-block";
+    block.dataset.deviceId = String(d.id);
     if ((d.mount_side || "front") === "back") {
       block.classList.add("back");
+    }
+    if (state.editingDeviceId === d.id) {
+      block.classList.add("selected");
     }
     block.draggable = true;
     block.style.gridRow = `${unitToGridStart(rack.units, d.u_position, d.u_height)} / span ${d.u_height}`;
@@ -918,14 +1132,18 @@ function wireEvents() {
         body: JSON.stringify({
           username: byId("username").value.trim(),
           password: byId("password").value,
+          otp_code: normalizeOtpCode(byId("otpCode").value),
         }),
       });
-      state.token = token.access_token;
-      state.username = token.username;
-      state.role = token.role;
-      state.authSource = token.auth_source;
-      byId("sessionInfo").textContent = `${token.username} (${token.role}, ${token.auth_source})`;
-      toggleAppLoggedIn(true);
+      applySession({
+        token: token.access_token,
+        username: token.username,
+        role: token.role,
+        authSource: token.auth_source,
+        expiresAt: token.expires_at,
+      });
+      persistSession();
+      byId("otpCode").value = "";
       window.scrollTo(0, 0);
       await refreshData();
     } catch (err) {
@@ -1110,6 +1328,26 @@ function wireEvents() {
     byId("csvImportStatus").textContent = "No import yet.";
   });
 
+  byId("menuSecurityBtn").addEventListener("click", async () => {
+    closeTopMenus();
+    byId("securityModal").hidden = false;
+    try {
+      await refreshTwoFactorStatus();
+    } catch (err) {
+      authStatus.textContent = err.message;
+    }
+  });
+
+  byId("menuExportXlsxBtn").addEventListener("click", async () => {
+    closeTopMenus();
+    try {
+      await exportSelectedServerroomXlsx();
+      authStatus.textContent = "XLSX export downloaded";
+    } catch (err) {
+      authStatus.textContent = err.message;
+    }
+  });
+
   byId("closeInventoryManagerBtn").addEventListener("click", () => {
     byId("inventoryManagerModal").hidden = true;
   });
@@ -1124,9 +1362,68 @@ function wireEvents() {
     byId("csvImportModal").hidden = true;
   });
 
+  byId("closeSecurityModalBtn").addEventListener("click", () => {
+    byId("securityModal").hidden = true;
+  });
+
   byId("csvImportModal").addEventListener("click", (evt) => {
     if (evt.target.id === "csvImportModal") {
       byId("csvImportModal").hidden = true;
+    }
+  });
+
+  byId("securityModal").addEventListener("click", (evt) => {
+    if (evt.target.id === "securityModal") {
+      byId("securityModal").hidden = true;
+    }
+  });
+
+  byId("refreshTwoFactorStatusBtn").addEventListener("click", async () => {
+    try {
+      await refreshTwoFactorStatus();
+    } catch (err) {
+      authStatus.textContent = err.message;
+    }
+  });
+
+  byId("startTwoFactorSetupBtn").addEventListener("click", async () => {
+    try {
+      const setup = await api("/api/auth/2fa/setup", { method: "POST" });
+      byId("twoFactorSecret").value = `Secret: ${setup.secret}`;
+      byId("twoFactorUri").value = `Provisioning URI: ${setup.provisioning_uri}`;
+      byId("twoFactorSetupPanel").hidden = false;
+      state.twoFactorStatus = { available: true, enabled: false, setup_pending: true };
+      renderTwoFactorStatus();
+    } catch (err) {
+      authStatus.textContent = err.message;
+    }
+  });
+
+  byId("confirmTwoFactorBtn").addEventListener("click", async () => {
+    try {
+      state.twoFactorStatus = await api("/api/auth/2fa/confirm", {
+        method: "POST",
+        body: JSON.stringify({ otp_code: normalizeOtpCode(byId("twoFactorConfirmCode").value) }),
+      });
+      byId("twoFactorConfirmCode").value = "";
+      renderTwoFactorStatus();
+      authStatus.textContent = "2FA enabled";
+    } catch (err) {
+      authStatus.textContent = err.message;
+    }
+  });
+
+  byId("disableTwoFactorBtn").addEventListener("click", async () => {
+    try {
+      state.twoFactorStatus = await api("/api/auth/2fa/disable", {
+        method: "POST",
+        body: JSON.stringify({ otp_code: normalizeOtpCode(byId("twoFactorDisableCode").value) }),
+      });
+      byId("twoFactorDisableCode").value = "";
+      renderTwoFactorStatus();
+      authStatus.textContent = "2FA disabled";
+    } catch (err) {
+      authStatus.textContent = err.message;
     }
   });
 
@@ -1218,8 +1515,13 @@ function wireEvents() {
   });
 }
 
-toggleAppLoggedIn(false);
-initializeTheme();
-setupLayoutResizers();
-wireEvents();
-syncLayoutVisibility();
+async function initializeApp() {
+  toggleAppLoggedIn(false);
+  initializeTheme();
+  setupLayoutResizers();
+  wireEvents();
+  syncLayoutVisibility();
+  await restoreSession();
+}
+
+initializeApp();

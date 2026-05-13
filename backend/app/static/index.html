@@ -13,6 +13,7 @@
       <p>Login to manage serverrooms, racks, and inventory templates.</p>
       <input id="username" placeholder="Username" />
       <input id="password" type="password" placeholder="Password" />
+      <input id="otpCode" placeholder="2FA code (if enabled)" inputmode="numeric" autocomplete="one-time-code" />
       <button id="loginBtn">Login</button>
       <p id="authStatus">Not logged in</p>
     </div>
@@ -32,6 +33,8 @@
           </div>
         </details>
         <button id="menuImportCsvBtn" class="menu-link-btn">CSV Import</button>
+        <button id="menuExportXlsxBtn" class="menu-link-btn">Export XLSX</button>
+        <button id="menuSecurityBtn" class="menu-link-btn">Security</button>
         <details>
           <summary>View</summary>
           <div class="menu-popover">
@@ -320,6 +323,43 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260417h"></script>
+  <div id="securityModal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+      <h2>Security</h2>
+      <p id="twoFactorStatusText">2FA status unavailable.</p>
+      <p id="twoFactorSupportHint" class="hint">2FA setup is available for local accounts.</p>
+
+      <div id="twoFactorControls">
+        <div class="row split">
+          <button id="startTwoFactorSetupBtn">Start 2FA Setup</button>
+          <button id="refreshTwoFactorStatusBtn" class="btn-secondary">Refresh Status</button>
+        </div>
+
+        <div id="twoFactorSetupPanel" hidden>
+          <p class="hint">Add the secret below to your authenticator app, then enter a 6-digit code to confirm.</p>
+          <textarea id="twoFactorSecret" readonly></textarea>
+          <textarea id="twoFactorUri" readonly></textarea>
+          <div class="row split">
+            <input id="twoFactorConfirmCode" placeholder="6-digit code" inputmode="numeric" autocomplete="one-time-code" />
+            <button id="confirmTwoFactorBtn">Confirm 2FA</button>
+          </div>
+        </div>
+
+        <div id="twoFactorDisablePanel" hidden>
+          <p class="hint">To disable 2FA, enter a current code from your authenticator app.</p>
+          <div class="row split">
+            <input id="twoFactorDisableCode" placeholder="Current 6-digit code" inputmode="numeric" autocomplete="one-time-code" />
+            <button id="disableTwoFactorBtn" class="btn-secondary">Disable 2FA</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button id="closeSecurityModalBtn" class="btn-secondary">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20260513b"></script>
 </body>
 </html>

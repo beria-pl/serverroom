@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from ldap3 import ALL, Connection, Server
+import pyotp
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -55,10 +56,29 @@ def ldap_authenticate(username: str, password: str) -> bool:
         connection.unbind()
 
 
-def create_access_token(subject: str, role: str, auth_source: str) -> str:
+def create_access_token(subject: str, role: str, auth_source: str) -> tuple[str, datetime]:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
     payload = {"sub": subject, "role": role, "auth_source": auth_source, "exp": expire}
-    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm), expire
+
+
+def generate_totp_secret() -> str:
+    return pyotp.random_base32()
+
+
+def build_totp_provisioning_uri(secret: str, username: str) -> str:
+    return pyotp.TOTP(secret).provisioning_uri(name=username, issuer_name=settings.totp_issuer or settings.app_name)
+
+
+def normalize_otp_code(otp_code: str | None) -> str:
+    return "".join(ch for ch in (otp_code or "") if ch.isdigit())
+
+
+def verify_totp_code(secret: str | None, otp_code: str | None) -> bool:
+    normalized = normalize_otp_code(otp_code)
+    if not secret or len(normalized) != 6:
+        return False
+    return bool(pyotp.TOTP(secret).verify(normalized, valid_window=1))
 
 
 def ensure_bootstrap_admin(db: Session) -> None:

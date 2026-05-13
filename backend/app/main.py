@@ -1,10 +1,13 @@
 import csv
-from io import StringIO
+from io import BytesIO, StringIO
+import re
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font
 from sqlalchemy import text
 from sqlalchemy.orm import Session, joinedload
 import random
@@ -13,12 +16,17 @@ from datetime import datetime, timezone
 from .audit import write_audit
 from .auth import (
     authenticate_local_user,
+    build_totp_provisioning_uri,
     create_access_token,
     ensure_bootstrap_admin,
+    generate_totp_secret,
+    get_current_identity,
     get_current_user,
     ldap_authenticate,
+    normalize_otp_code,
     require_admin,
     hash_password,
+    verify_totp_code,
 )
 from .config import settings
 from .database import Base, engine, get_db
@@ -52,6 +60,9 @@ from .schemas import (
     RackUpdate,
     ServerRoomCreate,
     ServerRoomOut,
+    TwoFactorCodeRequest,
+    TwoFactorSetupOut,
+    TwoFactorStatusOut,
     TokenResponse,
 )
 
@@ -86,8 +97,203 @@ def ensure_inventory_archive_columns() -> None:
         )
 
 
+def ensure_local_user_totp_columns() -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE local_users ADD COLUMN IF NOT EXISTS totp_secret VARCHAR(64) NULL"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE local_users ADD COLUMN IF NOT EXISTS totp_enabled INTEGER NOT NULL DEFAULT 0"
+            )
+        )
+
+
 ensure_mount_side_columns()
 ensure_inventory_archive_columns()
+ensure_local_user_totp_columns()
+
+
+SHEET_NAME_MAX_LENGTH = 31
+
+
+def sanitize_excel_sheet_name(name: str, fallback: str) -> str:
+    sanitized = re.sub(r"[\\/*?:\[\]]", "_", (name or "").strip())
+    sanitized = sanitized.strip("'")
+    if not sanitized:
+        sanitized = fallback
+    return sanitized[:SHEET_NAME_MAX_LENGTH]
+
+
+def unique_sheet_name(name: str, seen: set[str], fallback: str) -> str:
+    base_name = sanitize_excel_sheet_name(name, fallback)
+    candidate = base_name
+    suffix = 1
+    while candidate in seen:
+        suffix_text = f"_{suffix}"
+        candidate = f"{base_name[:SHEET_NAME_MAX_LENGTH - len(suffix_text)]}{suffix_text}"
+        suffix += 1
+    seen.add(candidate)
+    return candidate
+
+
+def build_rack_u_rows(rack: Rack) -> list[dict[str, str | int]]:
+    units = rack.units or 42
+    device_by_u: dict[int, Device] = {}
+    for device in rack.devices:
+        start_u = max(1, device.u_position)
+        end_u = min(units, device.u_position + max(1, device.u_height) - 1)
+        for u_value in range(start_u, end_u + 1):
+            device_by_u[u_value] = device
+
+    rows: list[dict[str, str | int]] = []
+    for u_value in range(units, 0, -1):
+        device = device_by_u.get(u_value)
+        properties = device.properties if device else {}
+        rows.append(
+            {
+                "u": u_value,
+                "device_name": device.name if device else "",
+                "device_type": device.device_type if device else "",
+                "model": (device.model or "") if device else "",
+                "vendor": (device.vendor or "") if device else "",
+                "serial_number": (device.serial_number or "") if device else "",
+                "management_ip": (device.management_ip or "") if device else "",
+                "mount_side": (device.mount_side or "front") if device else "",
+                "u_height": device.u_height if device else "",
+                "device_start_u": device.u_position if device else "",
+                "hostname": str(properties.get("hostname", "")) if properties else "",
+                "host_ip": str(properties.get("host_ip", "")) if properties else "",
+                "ssh_endpoint": str(properties.get("ssh_endpoint", "")) if properties else "",
+                "notes": str(properties.get("notes", "")) if properties else "",
+            }
+        )
+    return rows
+
+
+def apply_rack_device_merges(sheet, rack: Rack, data_start_row: int, end_column: int) -> None:
+    units = rack.units or 42
+    for device in rack.devices:
+        start_u = max(1, device.u_position)
+        end_u = min(units, device.u_position + max(1, device.u_height) - 1)
+        span = end_u - start_u + 1
+        if span <= 1:
+            continue
+
+        top_row = data_start_row + (units - end_u)
+        bottom_row = data_start_row + (units - start_u)
+        for column in range(2, end_column + 1):
+            sheet.merge_cells(start_row=top_row, start_column=column, end_row=bottom_row, end_column=column)
+            sheet.cell(row=top_row, column=column).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+
+def build_serverroom_export_workbook(room: ServerRoom) -> BytesIO:
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    used_sheet_names: set[str] = set()
+
+    floorplans = sorted(
+        [link.floorplan for link in room.floorplan_links if link.floorplan],
+        key=lambda floorplan: floorplan.id,
+    )
+    racks = sorted(
+        [rack for floorplan in floorplans for rack in floorplan.racks],
+        key=lambda rack: (rack.name.lower(), rack.id),
+    )
+
+    if not racks:
+        sheet = workbook.create_sheet(title="Rack_Export")
+        sheet.append(["Serverroom", room.name])
+        sheet.append(["Message", "No racks found for this serverroom"])
+    else:
+        header = [
+            "U",
+            "Device Name",
+            "Device Type",
+            "Model",
+            "Vendor",
+            "Serial Number",
+            "Management IP",
+            "Mount Side",
+            "Device Height U",
+            "Device Start U",
+            "Hostname",
+            "Host IP",
+            "SSH Endpoint",
+            "Notes",
+        ]
+
+        for rack in racks:
+            sheet_name = unique_sheet_name(rack.name, used_sheet_names, f"Rack_{rack.id}")
+            sheet = workbook.create_sheet(title=sheet_name)
+            floorplan_name = rack.floorplan.name if rack.floorplan else ""
+            sheet.append(["Serverroom", room.name])
+            sheet.append(["Floorplan", floorplan_name])
+            sheet.append(["Rack", rack.name])
+            sheet.append(["Units", rack.units])
+            sheet.append([])
+            sheet.append(header)
+
+            for row in build_rack_u_rows(rack):
+                sheet.append(
+                    [
+                        row["u"],
+                        row["device_name"],
+                        row["device_type"],
+                        row["model"],
+                        row["vendor"],
+                        row["serial_number"],
+                        row["management_ip"],
+                        row["mount_side"],
+                        row["u_height"],
+                        row["device_start_u"],
+                        row["hostname"],
+                        row["host_ip"],
+                        row["ssh_endpoint"],
+                        row["notes"],
+                    ]
+                )
+
+            data_start_row = 7
+            apply_rack_device_merges(sheet, rack, data_start_row=data_start_row, end_column=len(header))
+
+            for cell in sheet[6]:
+                cell.font = Font(bold=True)
+                cell.alignment = Alignment(horizontal="center")
+
+            for row_index in range(data_start_row, data_start_row + (rack.units or 42)):
+                sheet.cell(row=row_index, column=1).alignment = Alignment(horizontal="center", vertical="center")
+
+            column_widths = {
+                "A": 8,
+                "B": 28,
+                "C": 14,
+                "D": 20,
+                "E": 18,
+                "F": 18,
+                "G": 18,
+                "H": 12,
+                "I": 14,
+                "J": 14,
+                "K": 22,
+                "L": 18,
+                "M": 28,
+                "N": 36,
+            }
+            for column_name, width in column_widths.items():
+                sheet.column_dimensions[column_name].width = width
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    return output
+
+
+def export_filename_for_serverroom(room_name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", room_name.strip()).strip("-._")
+    return f"{slug or 'serverroom'}.xlsx"
 
 
 def build_demo_serial(rng: random.Random) -> str:
@@ -335,24 +541,128 @@ def root() -> FileResponse:
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse:
     local_user = authenticate_local_user(db, payload.username, payload.password)
     if local_user:
-        token = create_access_token(local_user.username, role=local_user.role, auth_source="local")
+        if local_user.totp_enabled == 1 and not verify_totp_code(local_user.totp_secret, payload.otp_code):
+            raise HTTPException(status_code=401, detail="2FA code required or invalid")
+
+        token, expires_at = create_access_token(local_user.username, role=local_user.role, auth_source="local")
         return TokenResponse(
             access_token=token,
             username=local_user.username,
             role=local_user.role,
             auth_source="local",
+            expires_at=expires_at,
         )
 
     if ldap_authenticate(payload.username, payload.password):
-        token = create_access_token(payload.username, role="user", auth_source="ldap")
+        token, expires_at = create_access_token(payload.username, role="user", auth_source="ldap")
         return TokenResponse(
             access_token=token,
             username=payload.username,
             role="user",
             auth_source="ldap",
+            expires_at=expires_at,
         )
 
     raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+@app.get("/api/auth/2fa/status", response_model=TwoFactorStatusOut)
+def get_two_factor_status(
+    db: Session = Depends(get_db),
+    identity: dict[str, str] = Depends(get_current_identity),
+) -> TwoFactorStatusOut:
+    if identity.get("auth_source") != "local":
+        return TwoFactorStatusOut(available=False, enabled=False, setup_pending=False)
+
+    user = db.query(LocalUser).filter(LocalUser.username == identity["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Local user not found")
+
+    return TwoFactorStatusOut(
+        available=True,
+        enabled=user.totp_enabled == 1,
+        setup_pending=bool(user.totp_secret) and user.totp_enabled != 1,
+    )
+
+
+@app.post("/api/auth/2fa/setup", response_model=TwoFactorSetupOut)
+def setup_two_factor(
+    db: Session = Depends(get_db),
+    identity: dict[str, str] = Depends(get_current_identity),
+) -> TwoFactorSetupOut:
+    if identity.get("auth_source") != "local":
+        raise HTTPException(status_code=400, detail="2FA setup is available only for local accounts")
+
+    user = db.query(LocalUser).filter(LocalUser.username == identity["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Local user not found")
+
+    secret = generate_totp_secret()
+    user.totp_secret = secret
+    user.totp_enabled = 0
+    db.commit()
+    return TwoFactorSetupOut(secret=secret, provisioning_uri=build_totp_provisioning_uri(secret, user.username))
+
+
+@app.post("/api/auth/2fa/confirm", response_model=TwoFactorStatusOut)
+def confirm_two_factor(
+    payload: TwoFactorCodeRequest,
+    db: Session = Depends(get_db),
+    identity: dict[str, str] = Depends(get_current_identity),
+) -> TwoFactorStatusOut:
+    if identity.get("auth_source") != "local":
+        raise HTTPException(status_code=400, detail="2FA setup is available only for local accounts")
+
+    user = db.query(LocalUser).filter(LocalUser.username == identity["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Local user not found")
+    if not user.totp_secret:
+        raise HTTPException(status_code=400, detail="Start 2FA setup first")
+    if not verify_totp_code(user.totp_secret, normalize_otp_code(payload.otp_code)):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code")
+
+    user.totp_enabled = 1
+    write_audit(
+        db,
+        actor=identity["sub"],
+        action="enable_2fa",
+        entity_type="local_user",
+        entity_id=str(user.id),
+        new_values={"totp_enabled": 1},
+    )
+    db.commit()
+    return TwoFactorStatusOut(available=True, enabled=True, setup_pending=False)
+
+
+@app.post("/api/auth/2fa/disable", response_model=TwoFactorStatusOut)
+def disable_two_factor(
+    payload: TwoFactorCodeRequest,
+    db: Session = Depends(get_db),
+    identity: dict[str, str] = Depends(get_current_identity),
+) -> TwoFactorStatusOut:
+    if identity.get("auth_source") != "local":
+        raise HTTPException(status_code=400, detail="2FA setup is available only for local accounts")
+
+    user = db.query(LocalUser).filter(LocalUser.username == identity["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Local user not found")
+    if user.totp_enabled != 1 or not user.totp_secret:
+        raise HTTPException(status_code=400, detail="2FA is not enabled")
+    if not verify_totp_code(user.totp_secret, normalize_otp_code(payload.otp_code)):
+        raise HTTPException(status_code=400, detail="Invalid 2FA code")
+
+    user.totp_secret = None
+    user.totp_enabled = 0
+    write_audit(
+        db,
+        actor=identity["sub"],
+        action="disable_2fa",
+        entity_type="local_user",
+        entity_id=str(user.id),
+        new_values={"totp_enabled": 0},
+    )
+    db.commit()
+    return TwoFactorStatusOut(available=True, enabled=False, setup_pending=False)
 
 
 def map_floorplan_serverroom_id(floorplan: Floorplan) -> int | None:
@@ -517,6 +827,40 @@ def list_serverrooms(
     _: str = Depends(get_current_user),
 ) -> list[ServerRoomOut]:
     return db.query(ServerRoom).order_by(ServerRoom.name.asc()).all()
+
+
+@app.get("/api/serverrooms/{serverroom_id}/export.xlsx")
+def export_serverroom_xlsx(
+    serverroom_id: int,
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+) -> StreamingResponse:
+    room = (
+        db.query(ServerRoom)
+        .options(
+            joinedload(ServerRoom.floorplan_links)
+            .joinedload(ServerRoomFloorplan.floorplan)
+            .joinedload(Floorplan.racks)
+            .joinedload(Rack.devices),
+            joinedload(ServerRoom.floorplan_links)
+            .joinedload(ServerRoomFloorplan.floorplan)
+            .joinedload(Floorplan.racks)
+            .joinedload(Rack.floorplan),
+        )
+        .filter(ServerRoom.id == serverroom_id)
+        .first()
+    )
+    if not room:
+        raise HTTPException(status_code=404, detail="Serverroom not found")
+
+    workbook = build_serverroom_export_workbook(room)
+    filename = export_filename_for_serverroom(room.name)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(
+        workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
 @app.post("/api/serverrooms", response_model=ServerRoomOut)

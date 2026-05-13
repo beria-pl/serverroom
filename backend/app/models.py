@@ -77,6 +77,8 @@ class LocalUser(Base):
     password_hash = Column(String(512), nullable=False)
     role = Column(String(32), nullable=False, default="user")
     is_active = Column(Integer, nullable=False, default=1)
+    totp_secret = Column(String(64), nullable=True)
+    totp_enabled = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
