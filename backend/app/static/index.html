@@ -19,6 +19,34 @@
     </div>
   </div>
 
+  <div id="floorplanWizardModal" class="modal" hidden>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Create Floorplan</h2>
+        <button class="modal-close" data-close-modal="floorplanWizardModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="wizardFloorplanName">Floorplan Name:</label>
+          <input id="wizardFloorplanName" type="text" placeholder="e.g., Main Floor" value="Floor 1" />
+        </div>
+        <div class="form-group">
+          <label for="wizardRows">Number of Rows:</label>
+          <input id="wizardRows" type="number" min="1" max="10" value="2" />
+        </div>
+        <div class="form-group">
+          <label for="wizardRacksPerRow">Racks Per Row:</label>
+          <input id="wizardRacksPerRow" type="number" min="1" max="20" value="8" />
+        </div>
+        <p class="hint" id="wizardEstimatedSize"></p>
+      </div>
+      <div class="modal-footer">
+        <button id="wizardCancelBtn" class="btn-secondary">Cancel</button>
+        <button id="wizardCreateBtn">Create Floorplan</button>
+      </div>
+    </div>
+  </div>
+
   <div id="appShell" hidden>
     <header class="topbar">
       <h1>Serverroom Visualizer <span class="app-version">v0.9.260513</span></h1>
@@ -71,13 +99,6 @@
         <details class="panel-section">
           <summary>Floorplans</summary>
           <div class="panel-section-body">
-            <div class="row">
-              <input id="floorplanName" placeholder="Floorplan name" />
-            </div>
-            <div class="row split">
-              <input id="floorplanWidth" type="number" value="1000" min="200" />
-              <input id="floorplanHeight" type="number" value="640" min="200" />
-            </div>
             <button id="createFloorplanBtn">Create Floorplan</button>
             <select id="floorplanSelect" size="6"></select>
             <button id="deleteFloorplanBtn" class="btn-danger">Delete Selected Floorplan</button>

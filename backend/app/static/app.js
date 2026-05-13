@@ -47,6 +47,69 @@ function toggleTheme() {
   applyTheme();
 }
 
+function calculateFloorplanDimensions(numRows, racksPerRow) {
+  // FullHD is 1920x1080. Account for browser UI and app layout.
+  // Approximate available space for the canvas after UI elements
+  const maxCanvasWidth = 1200;  // pixels for FullHD minus left/right panels and scrollbars
+  const maxCanvasHeight = 880;  // pixels for FullHD minus top bar and margins
+  
+  // Standard rack dimensions
+  const rackWidth = 80;
+  const rackHeight = 220;
+  
+  // Calculate spacing to fit racks with some padding
+  const paddingPerRack = 20;  // pixels between racks
+  const marginTop = 30;
+  const marginLeft = 30;
+  
+  // Total width and height needed
+  const totalWidth = marginLeft + (racksPerRow * (rackWidth + paddingPerRack)) + paddingPerRack;
+  const totalHeight = marginTop + (numRows * (rackHeight + paddingPerRack)) + paddingPerRack;
+  
+  // Scale down if needed to fit FullHD without scrolling
+  let scale = 1;
+  if (totalWidth > maxCanvasWidth) {
+    scale = Math.min(scale, maxCanvasWidth / totalWidth);
+  }
+  if (totalHeight > maxCanvasHeight) {
+    scale = Math.min(scale, maxCanvasHeight / totalHeight);
+  }
+  
+  const scaledWidth = Math.round(totalWidth * scale);
+  const scaledHeight = Math.round(totalHeight * scale);
+  
+  return { width: scaledWidth, height: scaledHeight, paddingPerRack, marginTop, marginLeft };
+}
+
+function createRackGrid(numRows, racksPerRow, floorplanId) {
+  // Generate rack positions in a grid
+  const racks = [];
+  const dims = calculateFloorplanDimensions(numRows, racksPerRow);
+  
+  const rackWidth = 80;
+  const rackHeight = 220;
+  
+  for (let row = 0; row < numRows; row++) {
+    for (let col = 0; col < racksPerRow; col++) {
+      const x = dims.marginLeft + col * (rackWidth + dims.paddingPerRack);
+      const y = dims.marginTop + row * (rackHeight + dims.paddingPerRack);
+      
+      racks.push({
+        floorplan_id: floorplanId,
+        name: `R${row + 1}C${col + 1}`,
+        x: Math.round(x),
+        y: Math.round(y),
+        width: rackWidth,
+        height: rackHeight,
+        units: 42,
+        orientation: "front",
+      });
+    }
+  }
+  
+  return racks;
+}
+
 async function loadAndDisplayVersion() {
   try {
     const res = await fetch("/api/version");
@@ -1184,17 +1247,71 @@ function wireEvents() {
     await refreshData();
   });
 
-  byId("createFloorplanBtn").addEventListener("click", async () => {
+  byId("createFloorplanBtn").addEventListener("click", () => {
     if (!state.selectedServerroomId) return;
-    await api("/api/floorplans", {
+    // Show the wizard modal
+    byId("floorplanWizardModal").hidden = false;
+    byId("wizardFloorplanName").focus();
+    updateWizardEstimatedSize();
+  });
+
+  byId("wizardRows").addEventListener("input", updateWizardEstimatedSize);
+  byId("wizardRacksPerRow").addEventListener("input", updateWizardEstimatedSize);
+
+  function updateWizardEstimatedSize() {
+    const rows = Number(byId("wizardRows").value);
+    const racksPerRow = Number(byId("wizardRacksPerRow").value);
+    const dims = calculateFloorplanDimensions(rows, racksPerRow);
+    byId("wizardEstimatedSize").textContent = 
+      `Estimated canvas size: ${dims.width}×${dims.height}px (fits FullHD without scrolling)`;
+  }
+
+  byId("wizardCancelBtn").addEventListener("click", () => {
+    byId("floorplanWizardModal").hidden = true;
+  });
+
+  byId("floorplanWizardModal").addEventListener("click", (evt) => {
+    if (evt.target.dataset.closeModal === "floorplanWizardModal") {
+      byId("floorplanWizardModal").hidden = true;
+    }
+  });
+
+  byId("wizardCreateBtn").addEventListener("click", async () => {
+    if (!state.selectedServerroomId) return;
+    
+    const name = byId("wizardFloorplanName").value.trim() || "Floor 1";
+    const rows = Number(byId("wizardRows").value);
+    const racksPerRow = Number(byId("wizardRacksPerRow").value);
+    
+    if (rows < 1 || racksPerRow < 1) {
+      alert("Rows and racks per row must be at least 1");
+      return;
+    }
+    
+    const dims = calculateFloorplanDimensions(rows, racksPerRow);
+    
+    // Create the floorplan
+    const floorplan = await api("/api/floorplans", {
       method: "POST",
       body: JSON.stringify({
         serverroom_id: state.selectedServerroomId,
-        name: byId("floorplanName").value.trim() || "Main Floor",
-        width: Number(byId("floorplanWidth").value),
-        height: Number(byId("floorplanHeight").value),
+        name: name,
+        width: dims.width,
+        height: dims.height,
       }),
     });
+    
+    // Create racks in a grid
+    const racks = createRackGrid(rows, racksPerRow, floorplan.id);
+    for (const rack of racks) {
+      await api("/api/racks", {
+        method: "POST",
+        body: JSON.stringify(rack),
+      });
+    }
+    
+    // Close modal and refresh
+    byId("floorplanWizardModal").hidden = true;
     await refreshData();
   });
 
