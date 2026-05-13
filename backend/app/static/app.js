@@ -1253,6 +1253,27 @@ function wireEvents() {
     await refreshData();
   });
 
+  byId("deleteFloorplanBtn").addEventListener("click", async () => {
+    const floorplan = selectedFloorplan();
+    if (!floorplan) return;
+    if (!confirm(`Delete floorplan "${floorplan.name}"?`)) return;
+    await api(`/api/floorplans/${floorplan.id}`, { method: "DELETE" });
+    state.selectedFloorplanId = null;
+    state.selectedRackId = null;
+    await refreshData();
+  });
+
+  byId("deleteServerroomBtn").addEventListener("click", async () => {
+    const serverroom = selectedServerroom();
+    if (!serverroom) return;
+    if (!confirm(`Delete serverroom "${serverroom.name}" and all its floorplans?`)) return;
+    await api(`/api/serverrooms/${serverroom.id}`, { method: "DELETE" });
+    state.selectedServerroomId = null;
+    state.selectedFloorplanId = null;
+    state.selectedRackId = null;
+    await refreshData();
+  });
+
   byId("createTemplateBtn").addEventListener("click", async () => {
     const payload = {
       vendor: byId("templateVendor").value.trim(),

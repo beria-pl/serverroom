@@ -897,6 +897,33 @@ def create_serverroom(
     return room
 
 
+@app.delete("/api/serverrooms/{serverroom_id}")
+def delete_serverroom(
+    serverroom_id: int,
+    db: Session = Depends(get_db),
+    user: str = Depends(get_current_user),
+) -> dict[str, bool]:
+    room = db.query(ServerRoom).filter(ServerRoom.id == serverroom_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Serverroom not found")
+
+    old_values = {
+        "name": room.name,
+        "description": room.description,
+    }
+    db.delete(room)
+    write_audit(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="serverroom",
+        entity_id=str(serverroom_id),
+        old_values=old_values,
+    )
+    db.commit()
+    return {"ok": True}
+
+
 @app.get("/api/device-models", response_model=list[DeviceModelOut])
 def list_device_models(
     db: Session = Depends(get_db),
@@ -1036,6 +1063,34 @@ def create_floorplan(
     out = FloorplanOut.model_validate(floorplan)
     out.serverroom_id = payload.serverroom_id
     return out
+
+
+@app.delete("/api/floorplans/{floorplan_id}")
+def delete_floorplan(
+    floorplan_id: int,
+    db: Session = Depends(get_db),
+    user: str = Depends(get_current_user),
+) -> dict[str, bool]:
+    floorplan = db.query(Floorplan).filter(Floorplan.id == floorplan_id).first()
+    if not floorplan:
+        raise HTTPException(status_code=404, detail="Floorplan not found")
+
+    old_values = {
+        "name": floorplan.name,
+        "width": floorplan.width,
+        "height": floorplan.height,
+    }
+    db.delete(floorplan)
+    write_audit(
+        db,
+        actor=user,
+        action="delete",
+        entity_type="floorplan",
+        entity_id=str(floorplan_id),
+        old_values=old_values,
+    )
+    db.commit()
+    return {"ok": True}
 
 
 @app.put("/api/floorplans/{floorplan_id}", response_model=FloorplanOut)
